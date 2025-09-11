@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:hurrey_app/Auth/SignUpScreen.dart';
 import 'package:hurrey_app/Auth/login_screen.dart';
 import 'firebase_options.dart';
 
@@ -23,6 +24,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[100],
       ),
       home: LoginScreenModern(), // Set the home screen
+      // home: SignUpScreen(), 
 
       // 🧭 Named Routes
     );

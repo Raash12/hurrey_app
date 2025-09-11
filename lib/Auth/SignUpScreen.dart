@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hurrey_app/Admin_pages/dashboard.dart';
+import 'package:hurrey_app/Screens/dashboard.dart';
 
+/// SignUpScreen - A user registration screen with neumorphic design
+/// Features user registration with Firebase Auth and Firestore
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -11,43 +13,50 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  static const Color _gradientA = Color(0xFF5C5BEA);
-  static const Color _gradientB = Color(0xFF7E4DFF);
-  static const Color _pageBg1 = Color(0xFFF3F6FF);
-  static const Color _pageBg2 = Color(0xFFFDF7FF);
+  // Color constants matching the login screen
+  static const Color backgroundColor = Color(0xFFE6E9EF);
+  static const Color primaryColor = Color(0xFF3B6CFF); // Updated
+  static const Color textColor = Color(0xFF3D3D3D);
   
+  // Form controllers
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   
+  // State variables
   bool _loading = false;
   bool _obscurePassword = true;
   String? _error;
   
+  // Firebase instances
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   static const String _collectionName = 'users';
 
+  /// Handles the user registration process
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
+    
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
+      // Create user with email and password
       final cred = await _auth.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+      
       final user = cred.user;
+      if (user == null) throw FirebaseAuthException(code: 'user-null', message: 'User not found');
 
-      if (user == null) {
-        throw FirebaseAuthException(code: 'user-null', message: 'User not found');
-      }
-
+      // Update user profile with display name
       await user.updateDisplayName(_nameController.text.trim());
+      
+      // Store additional user data in Firestore
       await _db.collection(_collectionName).doc(user.uid).set({
         'uid': user.uid,
         'name': _nameController.text.trim(),
@@ -58,12 +67,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       if (!mounted) return;
 
+      // Clear form and show success message
       _nameController.clear();
       _emailController.clear();
       _passwordController.clear();
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ User created')),
+        const SnackBar(
+          content: Text('✅ User created successfully'),
+          backgroundColor: primaryColor,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
+      
+      // Navigate to dashboard
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+      
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? "Registration failed");
     } catch (_) {
@@ -83,141 +105,182 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        centerTitle: true,
-        title: const Text('Create User', style: TextStyle(fontWeight: FontWeight.w800)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminDashboard()),
-          ),
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_gradientA, _gradientB],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
-          ),
-        ),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
-        ),
-      ),
+      backgroundColor: backgroundColor,
       body: Stack(
         children: [
+          // Background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [_pageBg1, _pageBg2],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
+                colors: [Color(0xFFE6E9EF), Color(0xFFD1D9E6)],
               ),
             ),
           ),
           SafeArea(
-            top: false,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 120, 20, 24),
-              child: Column(
-                children: [
-                  Card(
-                    elevation: 6,
-                    shadowColor: const Color(0x335C5BEA),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            Text(
-                              "Create User",
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF111827),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text("Fill in the details below", style: TextStyle(color: Color(0xFF6B7280))),
-                            const SizedBox(height: 16),
-                            _buildTextField(
-                              controller: _nameController,
-                              hintText: "Full Name",
-                              icon: Icons.person_outline,
-                              validator: (v) => v!.trim().isEmpty ? "Enter full name" : null,
-                            ),
-                            const SizedBox(height: 14),
-                            _buildTextField(
-                              controller: _emailController,
-                              hintText: "Email Address",
-                              icon: Icons.alternate_email,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return "Enter email";
-                                if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
-                                  return "Enter valid email";
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 14),
-                            _buildTextField(
-                              controller: _passwordController,
-                              hintText: "Password",
-                              icon: Icons.lock_outline,
-                              obscureText: _obscurePassword,
-                              suffixIcon: IconButton(
-                                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return "Enter password";
-                                if (v.length < 6) return "At least 6 characters";
-                                return null;
-                              },
-                            ),
-                            if (_error != null) ...[
-                              const SizedBox(height: 10),
-                              Text(_error!, style: const TextStyle(color: Colors.red)),
-                            ],
-                            const SizedBox(height: 18),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _gradientB,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                ),
-                                onPressed: _loading ? null : _signUp,
-                                icon: _loading
-                                    ? const SizedBox(
-                                        width: 18, height: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                      )
-                                    : const Icon(Icons.person_add_alt_1),
-                                label: const Text('Create'),
-                              ),
-                            ),
-                          ],
+            child: Column(
+              children: [
+                // AppBar-like header
+                Container(
+                  height: 80,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [primaryColor, Color(0xFF3463D1)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Create User',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        NeumorphicContainer(
+                          width: 80,
+                          height: 80,
+                          borderRadius: BorderRadius.circular(20),
+                          child: const Icon(Icons.person_add, color: primaryColor, size: 40),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          "Create New User",
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Fill in the user details below",
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.6),
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        
+                        // Form
+                        Expanded(
+                          child: NeumorphicContainer(
+                            padding: const EdgeInsets.all(28),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  NeumorphicTextField(
+                                    controller: _nameController,
+                                    hintText: "Full Name",
+                                    prefixIcon: Icons.person_outline,
+                                    validator: (v) => v!.trim().isEmpty ? "Enter full name" : null,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  NeumorphicTextField(
+                                    controller: _emailController,
+                                    hintText: "Email Address",
+                                    prefixIcon: Icons.email_outlined,
+                                    keyboardType: TextInputType.emailAddress,
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return "Enter email";
+                                      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
+                                        return "Enter valid email";
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 20),
+                                  NeumorphicTextField(
+                                    controller: _passwordController,
+                                    hintText: "Password",
+                                    prefixIcon: Icons.lock_outline,
+                                    obscureText: _obscurePassword,
+                                    suffixIcon: _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                    onSuffixPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) return "Enter password";
+                                      if (v.length < 6) return "At least 6 characters";
+                                      return null;
+                                    },
+                                  ),
+                                  if (_error != null) ...[
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _error!,
+                                      style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                  const SizedBox(height: 24),
+                                  NeumorphicButton(
+                                    onPressed: _loading ? null : _signUp,
+                                    child: _loading
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            ),
+                                          )
+                                        : const Text(
+                                            "Create User",
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "User will be added to the system with default permissions",
+                          style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.5), height: 1.4),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
+          
           if (_loading)
             Positioned.fill(
               child: AbsorbPointer(
@@ -225,7 +288,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   color: Colors.black.withOpacity(0.1),
                   child: const Center(
                     child: SizedBox(
-                      height: 28, width: 28,
+                      height: 28,
+                      width: 28,
                       child: CircularProgressIndicator(strokeWidth: 3),
                     ),
                   ),
@@ -236,34 +300,118 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
   }
+}
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hintText,
-    required IconData icon,
-    bool obscureText = false,
-    Widget? suffixIcon,
-    String? Function(String?)? validator,
-  }) {
-    final base = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
+// NEUMORPHIC WIDGETS
+
+class NeumorphicContainer extends StatelessWidget {
+  final Widget child;
+  final double? width;
+  final double? height;
+  final BorderRadius borderRadius;
+  final EdgeInsets padding;
+
+  const NeumorphicContainer({
+    super.key,
+    required this.child,
+    this.width,
+    this.height,
+    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.padding = const EdgeInsets.all(0),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE6E9EF),
+        borderRadius: borderRadius,
+        boxShadow: [
+          BoxShadow(color: Colors.white.withOpacity(0.8), offset: const Offset(-4, -4), blurRadius: 8),
+          BoxShadow(color: const Color(0xFFA3B1C6).withOpacity(0.4), offset: const Offset(4, 4), blurRadius: 8),
+        ],
+      ),
+      child: child,
     );
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      validator: validator,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: _gradientA),
-        suffixIcon: suffixIcon,
-        hintText: hintText,
-        filled: true,
-        fillColor: Colors.white,
-        enabledBorder: base,
-        focusedBorder: base.copyWith(borderSide: const BorderSide(color: _gradientA, width: 1.6)),
-        errorBorder: base.copyWith(borderSide: const BorderSide(color: Colors.redAccent, width: 1.2)),
-        focusedErrorBorder: base.copyWith(borderSide: const BorderSide(color: Colors.redAccent, width: 1.2)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+  }
+}
+
+class NeumorphicTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final IconData prefixIcon;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final IconData? suffixIcon;
+  final VoidCallback? onSuffixPressed;
+  final String? Function(String?)? validator;
+
+  const NeumorphicTextField({
+    super.key,
+    required this.controller,
+    required this.hintText,
+    required this.prefixIcon,
+    this.keyboardType,
+    this.obscureText = false,
+    this.suffixIcon,
+    this.onSuffixPressed,
+    this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const textColor = Color(0xFF3D3D3D);
+    return NeumorphicContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: TextFormField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        style: const TextStyle(color: textColor, fontSize: 15),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+          border: InputBorder.none,
+          prefixIcon: Icon(prefixIcon, color: textColor.withOpacity(0.6)),
+          suffixIcon: suffixIcon != null
+              ? IconButton(icon: Icon(suffixIcon, color: textColor.withOpacity(0.6)), onPressed: onSuffixPressed)
+              : null,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        ),
+        validator: validator,
+      ),
+    );
+  }
+}
+
+class NeumorphicButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  const NeumorphicButton({super.key, this.onPressed, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF3B6CFF); // Updated
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.3), offset: const Offset(0, 4), blurRadius: 8)],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        ),
+        child: child,
       ),
     );
   }
