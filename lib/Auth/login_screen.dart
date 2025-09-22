@@ -2,11 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'package:hurrey_app/Screens/dashboard.dart';
+import 'package:hurrey_app/pages/customer_list_page.dart';
 
-/// LoginScreenModern - A modern authentication screen with neumorphic design
-/// Features email/password authentication using Firebase Auth
-/// Navigates to AdminDashboard upon successful login
+/// LoginScreenModern - responsive sizes for mobile (type-safe clamp + full file)
 class LoginScreenModern extends StatefulWidget {
   const LoginScreenModern({super.key});
 
@@ -16,18 +14,13 @@ class LoginScreenModern extends StatefulWidget {
 
 class _LoginScreenModernState extends State<LoginScreenModern>
     with SingleTickerProviderStateMixin {
-  // Form key for validation
   final _formKey = GlobalKey<FormState>();
-  
-  // Controllers for email and password text fields
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
-  // State variables
-  bool _obscurePassword = true; // Toggles password visibility
-  bool _loading = false;        // Shows loading state during authentication
-  
-  // Animation controllers for entrance animations
+
+  bool _obscurePassword = true;
+  bool _loading = false;
+
   late final AnimationController _ac;
   late final Animation<double> _fadeIn;
   late final Animation<Offset> _slideUp;
@@ -35,74 +28,44 @@ class _LoginScreenModernState extends State<LoginScreenModern>
   @override
   void initState() {
     super.initState();
-    
-    // Initialize animations for smooth entrance effects
-    _ac = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    
-    // Fade animation for the entire content
+    _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
     _fadeIn = CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic);
-    
-    // Slide up animation for content entrance
-    _slideUp = Tween<Offset>(
-      begin: const Offset(0, 0.08), // Starts slightly lower
-      end: Offset.zero,             // Ends at normal position
-    ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
-    
-    // Start the animation
+    _slideUp = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
     _ac.forward();
   }
 
   @override
   void dispose() {
-    // Clean up controllers to prevent memory leaks
     _ac.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  /// Handles the sign-in process with Firebase Authentication
-  /// Validates form inputs and attempts to authenticate user
   Future<void> _signIn() async {
-    // Validate form inputs before proceeding
     if (!_formKey.currentState!.validate()) return;
-    
-    // Set loading state to true to show progress indicator
     setState(() => _loading = true);
-    
-    // Get trimmed email and password values
+
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     try {
-      // Attempt to sign in with Firebase Auth
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      
-      // Navigate to dashboard if authentication is successful
+      await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        MaterialPageRoute(builder: (_) => const CustomerListPage()),
       );
     } on FirebaseAuthException catch (e) {
-      // Handle specific Firebase authentication errors
       _showSnack(e.message ?? 'Login failed');
     } catch (_) {
-      // Handle generic errors
       _showSnack('Something went wrong');
     } finally {
-      // Reset loading state regardless of success or failure
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  /// Displays a snackbar with the provided message
   void _showSnack(String msg) {
     const primaryColor = Color(0xFF3B6CFF);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -117,16 +80,41 @@ class _LoginScreenModernState extends State<LoginScreenModern>
 
   @override
   Widget build(BuildContext context) {
-    // Color constants for consistent theming
-    const backgroundColor = Color(0xFFE6E9EF);    // Light gray background
-    const primaryColor = Color(0xFF3B6CFF);       // Blue accent color
-    const textColor = Color(0xFF3D3D3D);          // Dark text color
+    // Theme
+    const backgroundColor = Color(0xFFE6E9EF);
+    const primaryColor = Color(0xFF3B6CFF);
+    const textColor = Color(0xFF3D3D3D);
+
+    // --- Responsive sizing ---
+    final size = MediaQuery.of(context).size;
+    final w = size.width;
+
+    final double scale = (w / 375.0).clamp(0.85, 1.15).toDouble();
+
+    final double logoSize = (88 * scale).clamp(68, 110).toDouble();
+    final double outerHPad = (w < 400 ? 20.0 : 24.0);
+    final double contentWidth = (w - outerHPad * 2).clamp(300, 380).toDouble();
+
+    final double titleSize = (24 * scale).clamp(20, 26).toDouble();
+    final double subTitleSize = (14 * scale).clamp(12, 15).toDouble();
+    final double sectionTitleSize = (20 * scale).clamp(18, 22).toDouble();
+
+    final double fieldHeight = (50 * scale).clamp(44, 56).toDouble();
+    final double buttonHeight = (50 * scale).clamp(46, 56).toDouble();
+    final double gapLarge = (28 * scale).clamp(20, 32).toDouble();
+    final double gapMed = (18 * scale).clamp(14, 22).toDouble();
+    final double gapSmall = (12 * scale).clamp(8, 14).toDouble();
+
+    final double cornerRadius = (20 * scale).clamp(14, 24).toDouble();
+    final double spaceBelowLogo = (20 * scale).clamp(14, 24).toDouble();
+    final double spaceBelowTitle = (6 * scale).clamp(4, 8).toDouble();
+    final EdgeInsets cardPadding = EdgeInsets.all((22 * scale).clamp(18, 26).toDouble());
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Stack(
         children: [
-          // Background with subtle gradient for depth
+          // background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -136,131 +124,128 @@ class _LoginScreenModernState extends State<LoginScreenModern>
               ),
             ),
           ),
-          
-          // Main content area
+
+          // Content
           SafeArea(
-            child: Column(
-              children: [
-                // Animated content with fade and slide effects
-                Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: contentWidth),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(horizontal: outerHPad, vertical: 24),
                   child: FadeTransition(
                     opacity: _fadeIn,
                     child: SlideTransition(
                       position: _slideUp,
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Logo and welcome section
-                            Column(
-                              children: [
-                                // App logo with neumorphic container
-                                NeumorphicContainer(
-                                  width: 100,
-                                  height: 100,
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Image.asset(
-                                      'image/Logo.jpg',
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, _, __) => Icon(
-                                        Icons.account_circle,
-                                        color: primaryColor,
-                                        size: 40,
-                                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Logo + headings
+                          Column(
+                            children: [
+                              NeumorphicContainer(
+                                width: logoSize,
+                                height: logoSize,
+                                borderRadius: BorderRadius.circular(cornerRadius),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(cornerRadius),
+                                  child: Image.asset(
+                                    'image/Logo.jpg',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, _, __) => const Icon(
+                                      Icons.account_circle,
+                                      color: primaryColor,
+                                      size: 40,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 24),
-                                
-                                // Welcome title
-                                Text(
-                                  "Welcome Back",
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
+                              ),
+                              SizedBox(height: spaceBelowLogo),
+                              Text(
+                                "Hurey App",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
                                 ),
-                                const SizedBox(height: 8),
-                                
-                                // Subtitle
-                                Text(
-                                  "Sign in to continue",
-                                  style: TextStyle(
-                                    color: textColor.withOpacity(0.6),
-                                    fontSize: 14,
-                                  ),
+                              ),
+                              SizedBox(height: spaceBelowTitle),
+                              Text(
+                                "Sign in to continue",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: textColor.withOpacity(0.6),
+                                  fontSize: subTitleSize,
                                 ),
-                              ],
-                            ),
-                            
-                            const SizedBox(height: 40),
-                            
-                            // Login form with neumorphic design
-                            NeumorphicContainer(
-                              padding: const EdgeInsets.all(28),
-                              child: Form(
-                                key: _formKey,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    // Form title
-                                    Text(
-                                      "Login",
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+
+                          SizedBox(height: gapLarge),
+
+                          // Card with form
+                          NeumorphicContainer(
+                            padding: cardPadding,
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    "Login",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: sectionTitleSize,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                    const SizedBox(height: 24),
-                                    
-                                    // Email input field
-                                    NeumorphicTextField(
-                                      controller: _emailController,
-                                      hintText: "Email Address",
-                                      prefixIcon: Icons.email_outlined,
-                                      keyboardType: TextInputType.emailAddress,
-                                      validator: (v) {
-                                        if (v == null || v.trim().isEmpty) {
-                                          return "Please enter your email";
-                                        }
-                                        final isValidEmail = RegExp(
-                                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                                        ).hasMatch(v.trim());
-                                        return isValidEmail ? null : "Please enter a valid email";
-                                      },
-                                    ),
-                                    
-                                    const SizedBox(height: 20),
-                                    
-                                    // Password input field
-                                    NeumorphicTextField(
-                                      controller: _passwordController,
-                                      hintText: "Password",
-                                      prefixIcon: Icons.lock_outline,
-                                      obscureText: _obscurePassword,
-                                      suffixIcon: _obscurePassword
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                      onSuffixPressed: () => setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      }),
-                                      validator: (v) => (v == null || v.length < 6)
-                                          ? "Password must be at least 6 characters"
-                                          : null,
-                                    ),
-                                    
-                                    const SizedBox(height: 24),
-                                    
-                                    // Sign in button
-                                    NeumorphicButton(
+                                  ),
+                                  SizedBox(height: gapMed),
+
+                                  // Email
+                                  NeumorphicTextField(
+                                    controller: _emailController,
+                                    hintText: "Email Address",
+                                    prefixIcon: Icons.email_outlined,
+                                    keyboardType: TextInputType.emailAddress,
+                                    height: fieldHeight,
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) {
+                                        return "Please enter your email";
+                                      }
+                                      final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                          .hasMatch(v.trim());
+                                      return ok ? null : "Please enter a valid email";
+                                    },
+                                  ),
+
+                                  SizedBox(height: gapSmall),
+
+                                  // Password
+                                  NeumorphicTextField
+                                  (
+                                    controller: _passwordController,
+                                    hintText: "Password",
+                                    prefixIcon: Icons.lock_outline,
+                                    obscureText: _obscurePassword,
+                                    suffixIcon:
+                                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                    onSuffixPressed: () =>
+                                        setState(() => _obscurePassword = !_obscurePassword),
+                                    height: fieldHeight,
+                                    validator: (v) =>
+                                        (v == null || v.length < 6)
+                                            ? "Password must be at least 6 characters"
+                                            : null,
+                                  ),
+
+                                  SizedBox(height: gapMed),
+
+                                  // Button (fixed, responsive height)
+                                  SizedBox(
+                                    height: buttonHeight,
+                                    child: NeumorphicButton(
                                       onPressed: _loading ? null : _signIn,
                                       child: _loading
                                           ? const SizedBox(
@@ -271,39 +256,38 @@ class _LoginScreenModernState extends State<LoginScreenModern>
                                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                               ),
                                             )
-                                          : const Text(
+                                          : Text(
                                               "Sign In",
                                               style: TextStyle(
-                                                fontSize: 16,
+                                                fontSize: (16 * scale).clamp(14, 18).toDouble(),
                                                 fontWeight: FontWeight.w600,
                                                 color: Colors.white,
                                               ),
                                             ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
-                            
-                            const SizedBox(height: 24),
-                            
-                            // Terms and privacy notice
-                            Text(
-                              "By continuing, you agree to our Terms of Service and Privacy Policy",
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: textColor.withOpacity(0.5),
-                                height: 1.4,
-                              ),
-                              textAlign: TextAlign.center,
+                          ),
+
+                          SizedBox(height: gapMed),
+
+                          Text(
+                            "By continuing, you agree to our Terms of Service and Privacy Policy",
+                            style: TextStyle(
+                              fontSize: (11 * scale).clamp(10, 12).toDouble(),
+                              color: textColor.withOpacity(0.5),
+                              height: 1.4,
                             ),
-                          ],
-                        ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -312,7 +296,8 @@ class _LoginScreenModernState extends State<LoginScreenModern>
   }
 }
 
-/// NeumorphicContainer - A custom widget that creates a neumorphic design effect
+/// ---------------- Neumorphic primitives ----------------
+
 class NeumorphicContainer extends StatelessWidget {
   final Widget child;
   final double? width;
@@ -343,13 +328,11 @@ class NeumorphicContainer extends StatelessWidget {
             color: Colors.white.withOpacity(0.8),
             offset: const Offset(-4, -4),
             blurRadius: 8,
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: const Color(0xFFA3B1C6).withOpacity(0.4),
             offset: const Offset(4, 4),
             blurRadius: 8,
-            spreadRadius: 0,
           ),
         ],
       ),
@@ -358,7 +341,6 @@ class NeumorphicContainer extends StatelessWidget {
   }
 }
 
-/// NeumorphicTextField - A custom text field with neumorphic styling
 class NeumorphicTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
@@ -368,6 +350,9 @@ class NeumorphicTextField extends StatelessWidget {
   final IconData? suffixIcon;
   final VoidCallback? onSuffixPressed;
   final String? Function(String?)? validator;
+
+  /// Fixed height for responsive control sizing
+  final double height;
 
   const NeumorphicTextField({
     super.key,
@@ -379,69 +364,55 @@ class NeumorphicTextField extends StatelessWidget {
     this.suffixIcon,
     this.onSuffixPressed,
     this.validator,
+    this.height = 50,
   });
 
   @override
   Widget build(BuildContext context) {
     const textColor = Color(0xFF3D3D3D);
-    
+
     return NeumorphicContainer(
+      height: height,
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: TextFormField(
-        controller: controller,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        style: const TextStyle(
-          color: textColor,
-          fontSize: 15,
+      child: Center(
+        child: TextFormField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          textAlignVertical: TextAlignVertical.center,
+          style: const TextStyle(color: textColor, fontSize: 15),
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+            border: InputBorder.none,
+            isCollapsed: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            prefixIcon: Icon(prefixIcon, color: textColor.withOpacity(0.6)),
+            suffixIcon: suffixIcon != null
+                ? IconButton(
+                    icon: Icon(suffixIcon, color: textColor.withOpacity(0.6)),
+                    onPressed: onSuffixPressed,
+                  )
+                : null,
+          ),
+          validator: validator,
         ),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(
-            color: textColor.withOpacity(0.5),
-          ),
-          border: InputBorder.none,
-          prefixIcon: Icon(
-            prefixIcon,
-            color: textColor.withOpacity(0.6),
-          ),
-          suffixIcon: suffixIcon != null
-              ? IconButton(
-                  icon: Icon(
-                    suffixIcon,
-                    color: textColor.withOpacity(0.6),
-                  ),
-                  onPressed: onSuffixPressed,
-                )
-              : null,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 16,
-          ),
-        ),
-        validator: validator,
       ),
     );
   }
 }
 
-/// NeumorphicButton - A custom elevated button with neumorphic styling
 class NeumorphicButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget child;
 
-  const NeumorphicButton({
-    super.key,
-    this.onPressed,
-    required this.child,
-  });
+  const NeumorphicButton({super.key, this.onPressed, required this.child});
 
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF3B6CFF);
-    
+
     return Container(
-      height: 50,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -457,11 +428,9 @@ class NeumorphicButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
         ),
         child: child,
       ),
