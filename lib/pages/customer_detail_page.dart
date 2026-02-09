@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // Import intl for date formatting
+import 'package:intl/intl.dart';
 import 'edit_customer_page.dart';
 
 class CustomerDetailPage extends StatefulWidget {
@@ -20,7 +20,6 @@ class CustomerDetailPage extends StatefulWidget {
 }
 
 class _CustomerDetailPageState extends State<CustomerDetailPage> {
-  // Function to add a transaction
   void _showTransactionDialog(BuildContext context, bool isDeposit) {
     final TextEditingController amountCtrl = TextEditingController();
     final TextEditingController descCtrl = TextEditingController();
@@ -54,7 +53,9 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             const SizedBox(height: 15),
             TextField(
               controller: amountCtrl,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: "Amount",
                 border: OutlineInputBorder(
@@ -100,10 +101,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       ? (isDeposit ? "Deposit" : "Withdrawal")
                       : descCtrl.text;
 
-                  Navigator.pop(context); // Close dialog first
+                  final now = DateTime.now().toIso8601String(); // Waqtiga hadda
+
+                  Navigator.pop(context);
 
                   try {
-                    // 1. Add to Transactions Sub-collection
+                    // 1. Transaction Log
                     await FirebaseFirestore.instance
                         .collection('customers')
                         .doc(widget.customerId)
@@ -111,11 +114,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                         .add({
                           'amount': amount,
                           'type': isDeposit ? 'in' : 'out',
-                          'date': DateTime.now().toIso8601String(),
+                          'date': now,
                           'description': desc,
                         });
 
-                    // 2. Update Main Customer Balance
+                    // 2. ISBEDELKA MUHIIMKA AH: Waxaan update gareyneynaa "updatedAt"
+                    // Tani waxay sababaysaa inuu List-ga sare u koro.
                     await FirebaseFirestore.instance
                         .collection('customers')
                         .doc(widget.customerId)
@@ -126,7 +130,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                           'amountOut': !isDeposit
                               ? FieldValue.increment(amount)
                               : FieldValue.increment(0),
-                          'updatedAt': DateTime.now().toIso8601String(),
+                          'updatedAt': now, // <--- KANI WAA FURAH!
                         });
 
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -160,9 +164,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Delete Customer"),
-        content: const Text(
-          "This will delete the customer and ALL their transaction history. Are you sure?",
-        ),
+        content: const Text("This will delete the customer. Are you sure?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -170,15 +172,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           ),
           TextButton(
             onPressed: () async {
-              // Note: Subcollections need to be deleted manually in Firestore usually,
-              // but for simple apps, deleting the parent doc is often the first step.
-              // Ideally, use a Cloud Function for recursive delete.
               await FirebaseFirestore.instance
                   .collection('customers')
                   .doc(widget.customerId)
                   .delete();
-              Navigator.pop(ctx); // Close dialog
-              Navigator.pop(context); // Go back to list
+              Navigator.pop(ctx);
+              Navigator.pop(context);
             },
             child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),
@@ -200,7 +199,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () {
-              // Only for editing Name/Phone/Desc. NOT Balance.
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -209,7 +207,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     customerData: {
                       'name': widget.customerName,
                       'phone': widget.customerPhone,
-                    }, // Simplified
+                    },
                   ),
                 ),
               );
@@ -223,7 +221,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       ),
       body: Column(
         children: [
-          // Header Card with Live Balance
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
@@ -273,7 +270,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                           backgroundColor: Colors.green[600],
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          elevation: 0,
                         ),
                         onPressed: () => _showTransactionDialog(context, true),
                       ),
@@ -287,7 +283,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                           backgroundColor: Colors.red[400],
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          elevation: 0,
                         ),
                         onPressed: () => _showTransactionDialog(context, false),
                       ),
@@ -317,7 +312,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
 
           const SizedBox(height: 10),
 
-          // Transaction List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -334,16 +328,11 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 final docs = snapshot.data?.docs ?? [];
 
                 if (docs.isEmpty) {
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.history, size: 50, color: Colors.grey[300]),
-                      const SizedBox(height: 10),
-                      const Text(
-                        "No transactions yet",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
+                  return const Center(
+                    child: Text(
+                      "No transactions yet",
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   );
                 }
 
@@ -354,7 +343,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final isDeposit = data['type'] == 'in';
                     final date = DateTime.parse(data['date']);
-                    // Using intl package for nice date
                     final dateString = DateFormat('dd MMM yyyy').format(date);
                     final timeString = DateFormat('hh:mm a').format(date);
 

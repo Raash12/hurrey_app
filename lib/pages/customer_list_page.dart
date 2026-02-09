@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_customer_page.dart';
-import 'customer_detail_page.dart'; // Import-kan waa muhiim
+import 'customer_detail_page.dart';
 import 'edit_customer_page.dart';
 
 class CustomerListPage extends StatefulWidget {
@@ -31,8 +31,6 @@ class _CustomerListPageState extends State<CustomerListPage> {
             onPressed: () async {
               Navigator.pop(context);
               await FirebaseAuth.instance.signOut();
-              // Halkan ku celi LoginScreen-kaaga
-              // Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreenModern()), (route) => false);
             },
             child: const Text("Logout", style: TextStyle(color: Colors.red)),
           ),
@@ -56,14 +54,13 @@ class _CustomerListPageState extends State<CustomerListPage> {
       ),
       body: Column(
         children: [
-          // Search Bar
           Container(
             padding: const EdgeInsets.all(16.0),
             color: Colors.blue[800],
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: "Search by name or phone...",
+                hintText: "Search name...",
                 prefixIcon: const Icon(Icons.search, color: Colors.blue),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -80,29 +77,31 @@ class _CustomerListPageState extends State<CustomerListPage> {
               },
             ),
           ),
-
-          // List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
+              // List-gu wuxuu sugayaa in 'updatedAt' isbadalo si uu u kala sooco
               stream: FirebaseFirestore.instance
                   .collection("customers")
-                  .orderBy("createdAt", descending: true)
+                  .orderBy("updatedAt", descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (snapshot.hasError) {
-                  return Center(child: Text("Error: ${snapshot.error}"));
-                }
 
-                final docs = snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final name = data["name"].toString().toLowerCase();
-                  final phone = data["phone"].toString().toLowerCase();
-                  return name.contains(searchText) ||
-                      phone.contains(searchText);
-                }).toList();
+                final docs =
+                    snapshot.data?.docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final name = (data["name"] ?? "")
+                          .toString()
+                          .toLowerCase();
+                      final phone = (data["phone"] ?? "")
+                          .toString()
+                          .toLowerCase();
+                      return name.contains(searchText) ||
+                          phone.contains(searchText);
+                    }).toList() ??
+                    [];
 
                 if (docs.isEmpty) {
                   return const Center(
@@ -134,14 +133,13 @@ class _CustomerListPageState extends State<CustomerListPage> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
-                          // Go to Detail Page for Transactions
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => CustomerDetailPage(
                                 customerId: doc.id,
-                                customerName: data["name"],
-                                customerPhone: data["phone"],
+                                customerName: data["name"] ?? "No Name",
+                                customerPhone: data["phone"] ?? "",
                               ),
                             ),
                           );
@@ -154,7 +152,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                 radius: 25,
                                 backgroundColor: Colors.blue[100],
                                 child: Text(
-                                  data["name"].substring(0, 1).toUpperCase(),
+                                  (data["name"] ?? "U")
+                                      .substring(0, 1)
+                                      .toUpperCase(),
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.blue[800],
@@ -168,7 +168,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      data["name"],
+                                      data["name"] ?? "No Name",
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
@@ -176,7 +176,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      data["phone"],
+                                      data["phone"] ?? "",
                                       style: TextStyle(
                                         color: Colors.grey[600],
                                         fontSize: 13,

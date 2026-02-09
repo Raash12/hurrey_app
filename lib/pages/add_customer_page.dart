@@ -29,55 +29,48 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
 
     final double inAmount = double.tryParse(_inCtrl.text) ?? 0;
     final double outAmount = double.tryParse(_outCtrl.text) ?? 0;
+    final now = DateTime.now().toIso8601String();
 
-    // 1. Prepare Customer Data
     final customerData = {
       "name": _nameCtrl.text,
       "phone": _phoneCtrl.text,
       "description": _descCtrl.text,
       "amountIn": inAmount,
       "amountOut": outAmount,
-      "createdAt": DateTime.now().toIso8601String(),
+      "createdAt": now,
+      "updatedAt": now,
     };
 
     try {
-      // 2. Add Customer Document
       DocumentReference ref = await FirebaseFirestore.instance
           .collection("customers")
           .add(customerData);
 
-      // 3. Create Initial Transaction Log (if money is added)
       final batch = FirebaseFirestore.instance.batch();
-
       if (inAmount > 0) {
-        final transRef = ref.collection('transactions').doc();
-        batch.set(transRef, {
+        batch.set(ref.collection('transactions').doc(), {
           'amount': inAmount,
           'type': 'in',
-          'date': DateTime.now().toIso8601String(),
-          'description': 'Initial Opening Balance',
+          'date': now,
+          'description': 'Initial Balance',
         });
       }
-
       if (outAmount > 0) {
-        final transRef = ref.collection('transactions').doc();
-        batch.set(transRef, {
+        batch.set(ref.collection('transactions').doc(), {
           'amount': outAmount,
           'type': 'out',
-          'date': DateTime.now().toIso8601String(),
-          'description': 'Initial Opening Balance',
+          'date': now,
+          'description': 'Initial Balance',
         });
       }
-
       await batch.commit();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Customer added successfully"),
+          content: Text("Customer Added"),
           backgroundColor: Colors.green,
         ),
       );
-
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const CustomerListPage()),
@@ -102,52 +95,61 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            _buildTextField(_nameCtrl, "Name", Icons.person),
-            const SizedBox(height: 16),
-            _buildTextField(
-              _phoneCtrl,
-              "Phone",
-              Icons.phone,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-            _buildTextField(
-              _descCtrl,
-              "Description",
-              Icons.description,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 24),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Opening Balance (Optional)",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: "Name",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: "Phone",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.phone),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: "Description",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.description),
+              ),
+            ),
+            const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
-                  child: _buildTextField(
-                    _inCtrl,
-                    "Amount In (+)",
-                    Icons.arrow_downward,
+                  child: TextField(
+                    controller: _inCtrl,
                     keyboardType: TextInputType.number,
-                    color: Colors.green,
+                    decoration: const InputDecoration(
+                      labelText: "Amount In (+)",
+                      prefixIcon: Icon(
+                        Icons.arrow_downward,
+                        color: Colors.green,
+                      ),
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _buildTextField(
-                    _outCtrl,
-                    "Amount Out (-)",
-                    Icons.arrow_upward,
+                  child: TextField(
+                    controller: _outCtrl,
                     keyboardType: TextInputType.number,
-                    color: Colors.red,
+                    decoration: const InputDecoration(
+                      labelText: "Amount Out (-)",
+                      prefixIcon: Icon(Icons.arrow_upward, color: Colors.red),
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
               ],
@@ -158,39 +160,12 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[800],
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
                 minimumSize: const Size(double.infinity, 50),
               ),
-              child: const Text(
-                "Save Customer",
-                style: TextStyle(fontSize: 16),
-              ),
+              child: const Text("Save Customer"),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController ctrl,
-    String label,
-    IconData icon, {
-    TextInputType? keyboardType,
-    int maxLines = 1,
-    Color? color,
-  }) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: color != null ? TextStyle(color: color) : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        prefixIcon: Icon(icon, color: color),
       ),
     );
   }
