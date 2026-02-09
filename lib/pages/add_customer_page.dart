@@ -14,7 +14,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   final TextEditingController _phoneCtrl = TextEditingController();
   final TextEditingController _inCtrl = TextEditingController();
   final TextEditingController _outCtrl = TextEditingController();
-  final TextEditingController _descCtrl = TextEditingController(); // <-- Description controller
+  final TextEditingController _descCtrl = TextEditingController();
 
   Future<void> _addCustomer() async {
     if (_nameCtrl.text.isEmpty || _phoneCtrl.text.isEmpty) {
@@ -27,31 +27,67 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       return;
     }
 
-    final data = {
+    final double inAmount = double.tryParse(_inCtrl.text) ?? 0;
+    final double outAmount = double.tryParse(_outCtrl.text) ?? 0;
+
+    // 1. Prepare Customer Data
+    final customerData = {
       "name": _nameCtrl.text,
       "phone": _phoneCtrl.text,
-      "description": _descCtrl.text,  // <-- Save description
-      "amountIn": double.tryParse(_inCtrl.text) ?? 0,
-      "amountOut": double.tryParse(_outCtrl.text) ?? 0,
+      "description": _descCtrl.text,
+      "amountIn": inAmount,
+      "amountOut": outAmount,
       "createdAt": DateTime.now().toIso8601String(),
     };
 
-    await FirebaseFirestore.instance.collection("customers").add(data);
+    try {
+      // 2. Add Customer Document
+      DocumentReference ref = await FirebaseFirestore.instance
+          .collection("customers")
+          .add(customerData);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Customer added successfully"),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      // 3. Create Initial Transaction Log (if money is added)
+      final batch = FirebaseFirestore.instance.batch();
 
-    // Go directly to Customer List
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const CustomerListPage()),
-      (route) => false,
-    );
+      if (inAmount > 0) {
+        final transRef = ref.collection('transactions').doc();
+        batch.set(transRef, {
+          'amount': inAmount,
+          'type': 'in',
+          'date': DateTime.now().toIso8601String(),
+          'description': 'Initial Opening Balance',
+        });
+      }
+
+      if (outAmount > 0) {
+        final transRef = ref.collection('transactions').doc();
+        batch.set(transRef, {
+          'amount': outAmount,
+          'type': 'out',
+          'date': DateTime.now().toIso8601String(),
+          'description': 'Initial Opening Balance',
+        });
+      }
+
+      await batch.commit();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Customer added successfully"),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const CustomerListPage()),
+        (route) => false,
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -59,77 +95,103 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Add Customer"),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
-        elevation: 4,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(
-                controller: _nameCtrl,
-                decoration: InputDecoration(
-                  labelText: "Name",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  prefixIcon: const Icon(Icons.person),
+        child: Column(
+          children: [
+            _buildTextField(_nameCtrl, "Name", Icons.person),
+            const SizedBox(height: 16),
+            _buildTextField(
+              _phoneCtrl,
+              "Phone",
+              Icons.phone,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 16),
+            _buildTextField(
+              _descCtrl,
+              "Description",
+              Icons.description,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 24),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Opening Balance (Optional)",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _phoneCtrl,
-                decoration: InputDecoration(
-                  labelText: "Phone",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  prefixIcon: const Icon(Icons.phone),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTextField(
+                    _inCtrl,
+                    "Amount In (+)",
+                    Icons.arrow_downward,
+                    keyboardType: TextInputType.number,
+                    color: Colors.green,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _descCtrl, // <-- Description field
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: "Description",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  prefixIcon: const Icon(Icons.description),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildTextField(
+                    _outCtrl,
+                    "Amount Out (-)",
+                    Icons.arrow_upward,
+                    keyboardType: TextInputType.number,
+                    color: Colors.red,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _inCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: "Amount In",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  prefixIcon: const Icon(Icons.arrow_downward, color: Colors.green),
+              ],
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _addCustomer,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[800],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                minimumSize: const Size(double.infinity, 50),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _addCustomer,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: const Text("Add Customer", style: TextStyle(fontSize: 16)),
+              child: const Text(
+                "Save Customer",
+                style: TextStyle(fontSize: 16),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _inCtrl.dispose();
-    _outCtrl.dispose();
-    _descCtrl.dispose(); // <-- Dispose description controller
-    super.dispose();
+  Widget _buildTextField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    Color? color,
+  }) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: color != null ? TextStyle(color: color) : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        prefixIcon: Icon(icon, color: color),
+      ),
+    );
   }
 }

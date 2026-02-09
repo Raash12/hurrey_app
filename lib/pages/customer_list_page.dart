@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:hurrey_app/Auth/login_screen.dart';
 import 'add_customer_page.dart';
+import 'customer_detail_page.dart'; // Import-kan waa muhiim
 import 'edit_customer_page.dart';
 
 class CustomerListPage extends StatefulWidget {
@@ -16,40 +16,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   String searchText = "";
 
-  Future<void> _deleteCustomer(String id, String name) async {
-    await FirebaseFirestore.instance.collection("customers").doc(id).delete();
-  }
-
-  void _showDeleteDialog(BuildContext context, String id, String name) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete Customer"),
-        content: Text("Are you sure you want to delete $name?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              _deleteCustomer(id, name);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("$name deleted successfully"),
-                  backgroundColor: Colors.red,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-void _confirmLogout() {
+  void _confirmLogout() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -62,13 +29,10 @@ void _confirmLogout() {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // Close dialog
+              Navigator.pop(context);
               await FirebaseAuth.instance.signOut();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreenModern()),
-                (route) => false,
-              );
+              // Halkan ku celi LoginScreen-kaaga
+              // Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreenModern()), (route) => false);
             },
             child: const Text("Logout", style: TextStyle(color: Colors.red)),
           ),
@@ -77,35 +41,37 @@ void _confirmLogout() {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text("Customer Manager"),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _confirmLogout,
-          ),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _confirmLogout),
         ],
       ),
       body: Column(
         children: [
-          Padding(
+          // Search Bar
+          Container(
             padding: const EdgeInsets.all(16.0),
+            color: Colors.blue[800],
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                labelText: "Search by name or phone",
+                hintText: "Search by name or phone...",
                 prefixIcon: const Icon(Icons.search, color: Colors.blue),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.blue, width: 2)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
                 filled: true,
-                fillColor: Colors.grey[50],
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
               onChanged: (val) {
                 setState(() {
@@ -114,87 +80,140 @@ void _confirmLogout() {
               },
             ),
           ),
+
+          // List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection("customers").orderBy("createdAt", descending: true).snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection("customers")
+                  .orderBy("createdAt", descending: true)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.blue));
+                  return const Center(child: CircularProgressIndicator());
                 }
-
                 if (snapshot.hasError) {
-                  return Center(child: Text("Error loading data", style: TextStyle(color: Colors.red[300])));
+                  return Center(child: Text("Error: ${snapshot.error}"));
                 }
 
                 final docs = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final name = data["name"].toString().toLowerCase();
                   final phone = data["phone"].toString().toLowerCase();
-                  return name.contains(searchText) || phone.contains(searchText);
+                  return name.contains(searchText) ||
+                      phone.contains(searchText);
                 }).toList();
 
                 if (docs.isEmpty) {
-                  return Center(child: Text(searchText.isEmpty ? "No customers found" : "No matching customers"));
+                  return const Center(
+                    child: Text(
+                      "No customers found",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  );
                 }
 
                 return ListView.builder(
                   itemCount: docs.length,
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     final data = doc.data() as Map<String, dynamic>;
-                    final balance = (data["amountIn"] ?? 0) - (data["amountOut"] ?? 0);
-                    final balanceColor = balance >= 0 ? Colors.green : Colors.red;
+                    final balance =
+                        (data["amountIn"] ?? 0) - (data["amountOut"] ?? 0);
+                    final balanceColor = balance >= 0
+                        ? Colors.green[700]
+                        : Colors.red[700];
 
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
+                    return Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 3, offset: const Offset(0, 1))],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          // Go to Detail Page for Transactions
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CustomerDetailPage(
+                                customerId: doc.id,
+                                customerName: data["name"],
+                                customerPhone: data["phone"],
+                              ),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
                             children: [
-                              CircleAvatar(backgroundColor: Colors.blue[100], child: Icon(Icons.person, color: Colors.blue[600])),
-                              const SizedBox(width: 12),
+                              CircleAvatar(
+                                radius: 25,
+                                backgroundColor: Colors.blue[100],
+                                child: Text(
+                                  data["name"].substring(0, 1).toUpperCase(),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue[800],
+                                    fontSize: 20,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(data["name"], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                    Text("Phone: ${data["phone"]}", style: TextStyle(color: Colors.grey[600])),
-                                    if (data.containsKey("description") && (data["description"] ?? "").toString().isNotEmpty)
-                                      Text(data["description"], style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                                    Text(
+                                      data["name"],
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      data["phone"],
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 13,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => EditCustomerPage(customerId: doc.id, customerData: data)));
-                                },
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    "\$${balance.abs().toStringAsFixed(1)}",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: balanceColor,
+                                    ),
+                                  ),
+                                  Text(
+                                    balance >= 0 ? "Credit" : "Due",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: balanceColor,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                                onPressed: () => _showDeleteDialog(context, doc.id, data["name"]),
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 14,
+                                color: Colors.grey,
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _buildAmountChip("In: ${data["amountIn"]}", Colors.green),
-                              const SizedBox(width: 8),
-                              _buildAmountChip("Out: ${data["amountOut"]}", Colors.orange),
-                              const SizedBox(width: 8),
-                              _buildAmountChip("Balance: $balance", balanceColor),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     );
                   },
@@ -206,23 +225,14 @@ void _confirmLogout() {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCustomerPage()));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddCustomerPage()),
+          );
         },
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, size: 28),
+        backgroundColor: Colors.blue[800],
+        child: const Icon(Icons.add),
       ),
-    );
-  }
-
-  Widget _buildAmountChip(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
     );
   }
 }
