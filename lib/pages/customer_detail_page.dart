@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'edit_customer_page.dart';
+import 'pdf_generator.dart';
 
 class CustomerDetailPage extends StatefulWidget {
   final String customerId;
@@ -20,6 +21,227 @@ class CustomerDetailPage extends StatefulWidget {
 }
 
 class _CustomerDetailPageState extends State<CustomerDetailPage> {
+  // ---------------- CUSTOM DATE PICKER & REPORT LOGIC ----------------
+
+  void _showCustomDateRangePicker() {
+    // Default: Bishan kowdeeda ilaa maanta
+    DateTime startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    DateTime endDate = DateTime.now();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Column(
+                children: [
+                  Icon(Icons.date_range, size: 40, color: Colors.blue[800]),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Select Period",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  const Text(
+                    "Choose date range for report",
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // FROM DATE SELECTOR
+                  _buildDateSelector(
+                    label: "From:",
+                    date: startDate,
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: startDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => startDate = picked);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  // TO DATE SELECTOR
+                  _buildDateSelector(
+                    label: "To:",
+                    date: endDate,
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: endDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => endDate = picked);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey,
+                          side: const BorderSide(color: Colors.grey),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text("Cancel"),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Close Dialog
+                          _generateReport(startDate, endDate); // Generate PDF
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[800],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text("Print PDF"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDateSelector({
+    required String label,
+    required DateTime date,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.grey.shade50,
+        ),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              DateFormat('dd MMM yyyy').format(date),
+              style: TextStyle(
+                color: Colors.blue[800],
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.calendar_today, size: 18, color: Colors.blue[800]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _generateReport(DateTime start, DateTime end) async {
+    // Check Date Validity
+    if (start.isAfter(end)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Start Date cannot be after End Date"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Generating PDF..."),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    try {
+      // Fetch Data
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(widget.customerId)
+          .collection('transactions')
+          .orderBy('date', descending: true)
+          .get();
+
+      // Filter Data Locally
+      final filteredDocs = querySnapshot.docs.where((doc) {
+        final data = doc.data();
+        final date = DateTime.parse(data['date']);
+        // Normalize dates to remove time part for accurate comparison
+        final normalizeDate = DateTime(date.year, date.month, date.day);
+        final normalizeStart = DateTime(start.year, start.month, start.day);
+        final normalizeEnd = DateTime(end.year, end.month, end.day);
+
+        return (normalizeDate.isAtSameMomentAs(normalizeStart) ||
+                normalizeDate.isAfter(normalizeStart)) &&
+            (normalizeDate.isAtSameMomentAs(normalizeEnd) ||
+                normalizeDate.isBefore(normalizeEnd));
+      }).toList();
+
+      if (filteredDocs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("No transactions found in this period."),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final transactions = filteredDocs.map((e) => e.data()).toList();
+
+      // Call PDF Generator
+      await PdfGenerator.generateAndPrint(
+        widget.customerName,
+        widget.customerPhone,
+        start,
+        end,
+        transactions,
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // ---------------- END REPORT LOGIC ----------------
+
   void _showTransactionDialog(BuildContext context, bool isDeposit) {
     final TextEditingController amountCtrl = TextEditingController();
     final TextEditingController descCtrl = TextEditingController();
@@ -101,12 +323,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       ? (isDeposit ? "Deposit" : "Withdrawal")
                       : descCtrl.text;
 
-                  final now = DateTime.now().toIso8601String(); // Waqtiga hadda
+                  final now = DateTime.now().toIso8601String();
 
                   Navigator.pop(context);
 
                   try {
-                    // 1. Transaction Log
+                    // Transaction Log
                     await FirebaseFirestore.instance
                         .collection('customers')
                         .doc(widget.customerId)
@@ -118,8 +340,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                           'description': desc,
                         });
 
-                    // 2. ISBEDELKA MUHIIMKA AH: Waxaan update gareyneynaa "updatedAt"
-                    // Tani waxay sababaysaa inuu List-ga sare u koro.
+                    // Update Balance & updatedAt
                     await FirebaseFirestore.instance
                         .collection('customers')
                         .doc(widget.customerId)
@@ -130,7 +351,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                           'amountOut': !isDeposit
                               ? FieldValue.increment(amount)
                               : FieldValue.increment(0),
-                          'updatedAt': now, // <--- KANI WAA FURAH!
+                          'updatedAt': now,
                         });
 
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -196,6 +417,13 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // CUSTOM PRINT BUTTON
+          IconButton(
+            icon: const Icon(Icons.print),
+            tooltip: "Print Statement",
+            onPressed:
+                _showCustomDateRangePicker, // <--- Wuxuu furayaa Dialog-ga cusub
+          ),
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () {
