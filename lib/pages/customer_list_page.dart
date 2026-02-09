@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hurrey_app/Auth/login_screen.dart';
 import 'add_customer_page.dart';
 import 'customer_detail_page.dart';
 import 'edit_customer_page.dart';
@@ -29,8 +30,12 @@ class _CustomerListPageState extends State<CustomerListPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(context); // close dialog
               await FirebaseAuth.instance.signOut();
+              // Navigate to login page and remove all previous routes
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const LoginScreenModern()),
+              );
             },
             child: const Text("Logout", style: TextStyle(color: Colors.red)),
           ),
