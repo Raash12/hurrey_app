@@ -10,7 +10,7 @@ class AllTransactionsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text("Transaction History"),
+        title: const Text("All Transactions History"),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -20,6 +20,10 @@ class AllTransactionsPage extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
           }
 
           final transactions = snapshot.data ?? [];
@@ -32,17 +36,29 @@ class AllTransactionsPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemBuilder: (context, index) {
               final t = transactions[index];
-              final isPositive =
-                  t['type'] == 'income' ||
-                  t['type'] == 'in'; // income/in is positive
-              final color = isPositive ? Colors.green : Colors.red;
-              final icon = t['category'] == 'Bill'
-                  ? Icons.receipt
-                  : t['category'] == 'Debt'
-                  ? Icons.monetization_on
-                  : isPositive
-                  ? Icons.arrow_downward
-                  : Icons.arrow_upward;
+
+              // Determine Color and Icon based on category
+              Color color = Colors.grey;
+              IconData icon = Icons.help;
+              bool isPositive = false;
+
+              if (t['category'] == 'Income') {
+                color = Colors.green;
+                icon = Icons.arrow_downward;
+                isPositive = true;
+              } else if (t['category'] == 'Withdraw') {
+                color = Colors.red;
+                icon = Icons.arrow_upward;
+                isPositive = false;
+              } else if (t['category'] == 'Bill') {
+                color = Colors.blueGrey;
+                icon = Icons.receipt;
+                isPositive = false;
+              } else if (t['category'] == 'Debt') {
+                color = Colors.orange;
+                icon = Icons.monetization_on;
+                isPositive = false;
+              }
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -77,53 +93,67 @@ class AllTransactionsPage extends StatelessWidget {
     );
   }
 
-  // Combine streams from different collections
+  // --- MERGE ALL STREAMS ---
   Stream<List<Map<String, dynamic>>> _getAllTransactions() {
-    // Note: Firestore doesn't support easy multi-collection queries.
-    // We will combine them manually in the stream.
-    // Ideally, you should store all logs in a single 'transactions' collection for scalability.
-
-    // For now, we will just fetch recent items from each and merge them in memory.
-    // This is a simplified approach for your current structure.
-
+    // We combine distinct calls into one list using asyncMap
     return Stream.fromFuture(Future.value([])).asyncMap((_) async {
       List<Map<String, dynamic>> allItems = [];
 
-      // 1. Get Bills
-      final bills = await FirebaseFirestore.instance.collection('bills').get();
-      for (var doc in bills.docs) {
-        allItems.add({
-          'title': doc['name'],
-          'amount': doc['amount'],
-          'dateRaw': DateTime.parse(doc['date']),
-          'date': DateFormat('dd MMM').format(DateTime.parse(doc['date'])),
-          'type': 'expense',
-          'category': 'Bill',
-        });
+      try {
+        // 1. GET BILLS
+        final bills = await FirebaseFirestore.instance
+            .collection('bills')
+            .get();
+        for (var doc in bills.docs) {
+          allItems.add({
+            'title': doc['name'],
+            'amount': (doc['amount'] ?? 0).toString(),
+            'dateRaw': DateTime.parse(doc['date']),
+            'date': DateFormat('dd MMM').format(DateTime.parse(doc['date'])),
+            'category': 'Bill',
+          });
+        }
+
+        // 2. GET DEBTS
+        final debts = await FirebaseFirestore.instance
+            .collection('debts')
+            .get();
+        for (var doc in debts.docs) {
+          allItems.add({
+            'title': doc['name'],
+            'amount': (doc['amount'] ?? 0).toString(),
+            'dateRaw': DateTime.parse(doc['date']),
+            'date': DateFormat('dd MMM').format(DateTime.parse(doc['date'])),
+            'category': 'Debt',
+          });
+        }
+
+        // 3. GET CUSTOMER TRANSACTIONS (INCOME & WITHDRAW)
+        // Using collectionGroup to find ALL subcollections named 'transactions'
+        final customerTrans = await FirebaseFirestore.instance
+            .collectionGroup('transactions')
+            .get();
+
+        for (var doc in customerTrans.docs) {
+          final data = doc.data();
+          bool isDeposit = data['type'] == 'in' || data['type'] == 'income';
+
+          allItems.add({
+            'title':
+                data['description'] ?? (isDeposit ? "Deposit" : "Withdraw"),
+            'amount': (data['amount'] ?? 0).toString(),
+            'dateRaw': DateTime.parse(data['date']),
+            'date': DateFormat('dd MMM').format(DateTime.parse(data['date'])),
+            'category': isDeposit ? 'Income' : 'Withdraw',
+          });
+        }
+
+        // 4. SORT BY DATE (NEWEST FIRST)
+        allItems.sort((a, b) => b['dateRaw'].compareTo(a['dateRaw']));
+      } catch (e) {
+        debugPrint("Error fetching transactions: $e");
       }
 
-      // 2. Get Debts
-      final debts = await FirebaseFirestore.instance.collection('debts').get();
-      for (var doc in debts.docs) {
-        allItems.add({
-          'title': doc['name'],
-          'amount': doc['amount'],
-          'dateRaw': DateTime.parse(doc['date']),
-          'date': DateFormat('dd MMM').format(DateTime.parse(doc['date'])),
-          'type': 'expense', // Debt is money out/owed usually
-          'category': 'Debt',
-        });
-      }
-
-      // 3. Get Customer Transactions (Income/Withdraw)
-      // This requires iterating customers which can be heavy.
-      // BEST PRACTICE: When you add a transaction, also add it to a global 'history' collection.
-
-      // Since we don't have a global history yet, we'll skip deep nested queries
-      // to avoid performance issues, or you can implement a separate 'logs' collection.
-
-      // Sorting
-      allItems.sort((a, b) => b['dateRaw'].compareTo(a['dateRaw']));
       return allItems;
     });
   }
