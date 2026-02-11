@@ -2,7 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'package:hurrey_app/pages/customer_list_page.dart';
+// import 'package:hurrey_app/pages/customer_list_page.dart';
+import 'package:hurrey_app/pages/dashboard_screen.dart';
 
 /// LoginScreenModern - responsive sizes for mobile (type-safe clamp + full file)
 class LoginScreenModern extends StatefulWidget {
@@ -55,7 +56,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerListPage()),
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     } on FirebaseAuthException catch (e) {
       _showSnack(e.message ?? 'Login failed');

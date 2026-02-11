@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'customer_list_page.dart';
+import 'dashboard_screen.dart';
 
 class AddCustomerPage extends StatefulWidget {
-  const AddCustomerPage({super.key});
+  final bool isWithdraw; // <--- CUSUB: Nooca account-ka
+
+  const AddCustomerPage({
+    super.key,
+    this.isWithdraw = false,
+  }); // Default is Income
 
   @override
   State<AddCustomerPage> createState() => _AddCustomerPageState();
@@ -12,31 +17,39 @@ class AddCustomerPage extends StatefulWidget {
 class _AddCustomerPageState extends State<AddCustomerPage> {
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
-  final TextEditingController _inCtrl = TextEditingController();
-  final TextEditingController _outCtrl = TextEditingController();
+  final TextEditingController _balanceCtrl = TextEditingController();
   final TextEditingController _descCtrl = TextEditingController();
 
   Future<void> _addCustomer() async {
     if (_nameCtrl.text.isEmpty || _phoneCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please fill name and phone fields"),
+          content: Text("Please fill name and phone"),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    final double inAmount = double.tryParse(_inCtrl.text) ?? 0;
-    final double outAmount = double.tryParse(_outCtrl.text) ?? 0;
+    final double amount = double.tryParse(_balanceCtrl.text) ?? 0;
     final now = DateTime.now().toIso8601String();
 
+    // LOGIC: Withdraw miyaa mise Income?
+    double amountIn = 0;
+    double amountOut = 0;
+
+    if (widget.isWithdraw) {
+      amountOut = amount; // Withdraw
+    } else {
+      amountIn = amount; // Income
+    }
+
     final customerData = {
-      "name": _nameCtrl.text,
-      "phone": _phoneCtrl.text,
-      "description": _descCtrl.text,
-      "amountIn": inAmount,
-      "amountOut": outAmount,
+      "name": _nameCtrl.text.trim(),
+      "phone": _phoneCtrl.text.trim(),
+      "description": _descCtrl.text.trim(),
+      "amountIn": amountIn, // <--- Sax
+      "amountOut": amountOut, // <--- Sax
       "createdAt": now,
       "updatedAt": now,
     };
@@ -46,34 +59,25 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
           .collection("customers")
           .add(customerData);
 
-      final batch = FirebaseFirestore.instance.batch();
-      if (inAmount > 0) {
-        batch.set(ref.collection('transactions').doc(), {
-          'amount': inAmount,
-          'type': 'in',
+      if (amount > 0) {
+        await ref.collection('transactions').add({
+          'amount': amount,
+          'type': widget.isWithdraw ? 'out' : 'in', // Transaction Type sax ah
           'date': now,
-          'description': 'Initial Balance',
+          'description': 'Opening Balance',
         });
       }
-      if (outAmount > 0) {
-        batch.set(ref.collection('transactions').doc(), {
-          'amount': outAmount,
-          'type': 'out',
-          'date': now,
-          'description': 'Initial Balance',
-        });
-      }
-      await batch.commit();
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Customer Added"),
+          content: Text("Account Added"),
           backgroundColor: Colors.green,
         ),
       );
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerListPage()),
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -85,87 +89,107 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
 
   @override
   Widget build(BuildContext context) {
+    // UI Colors based on type
+    final primaryColor = widget.isWithdraw ? Colors.red : Colors.green;
+    final title = widget.isWithdraw
+        ? "New Withdraw Account"
+        : "New Income Account";
+
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text("Add Customer"),
-        backgroundColor: Colors.blue[800],
+        title: Text(title),
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            _buildField(_nameCtrl, "Name", Icons.person),
+            const SizedBox(height: 15),
+            _buildField(
+              _phoneCtrl,
+              "Phone",
+              Icons.phone,
+              type: TextInputType.phone,
+            ),
+            const SizedBox(height: 15),
+            _buildField(_descCtrl, "Description", Icons.notes, maxLines: 2),
+            const SizedBox(height: 25),
             TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: "Name",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
+              controller: _balanceCtrl,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: primaryColor,
+              ),
+              decoration: InputDecoration(
+                labelText: "amount in",
+                prefixIcon: Icon(
+                  widget.isWithdraw ? Icons.arrow_upward : Icons.arrow_downward,
+                  color: primaryColor,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: primaryColor.withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: primaryColor, width: 2),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: "Phone",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _descCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: "Description",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.description),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _inCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Amount In (+)",
-                      prefixIcon: Icon(
-                        Icons.arrow_downward,
-                        color: Colors.green,
-                      ),
-                      border: OutlineInputBorder(),
-                    ),
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _addCustomer,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _outCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Amount Out (-)",
-                      prefixIcon: Icon(Icons.arrow_upward, color: Colors.red),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                child: const Text(
+                  "Save Account",
+                  style: TextStyle(fontSize: 18),
                 ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _addCustomer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[800],
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 50),
               ),
-              child: const Text("Save Customer"),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    TextInputType type = TextInputType.text,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: type,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.grey),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.white,
       ),
     );
   }

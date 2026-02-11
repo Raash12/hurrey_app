@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'edit_customer_page.dart';
-import 'pdf_generator.dart';
+import 'pdf_generator.dart'; // Hubi inaad faylkan haysato
 
 class CustomerDetailPage extends StatefulWidget {
   final String customerId;
@@ -21,10 +21,8 @@ class CustomerDetailPage extends StatefulWidget {
 }
 
 class _CustomerDetailPageState extends State<CustomerDetailPage> {
-  // ---------------- CUSTOM DATE PICKER & REPORT LOGIC ----------------
-
+  // ---------------- 1. PDF & DATE PICKER LOGIC ----------------
   void _showCustomDateRangePicker() {
-    // Default: Bishan kowdeeda ilaa maanta
     DateTime startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
     DateTime endDate = DateTime.now();
 
@@ -54,7 +52,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // FROM DATE SELECTOR
                   _buildDateSelector(
                     label: "From:",
                     date: startDate,
@@ -65,13 +62,11 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                         firstDate: DateTime(2020),
                         lastDate: DateTime.now(),
                       );
-                      if (picked != null) {
+                      if (picked != null)
                         setStateDialog(() => startDate = picked);
-                      }
                     },
                   ),
                   const SizedBox(height: 15),
-                  // TO DATE SELECTOR
                   _buildDateSelector(
                     label: "To:",
                     date: endDate,
@@ -82,9 +77,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                         firstDate: DateTime(2020),
                         lastDate: DateTime.now(),
                       );
-                      if (picked != null) {
+                      if (picked != null)
                         setStateDialog(() => endDate = picked);
-                      }
                     },
                   ),
                 ],
@@ -96,26 +90,23 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.grey,
-                          side: const BorderSide(color: Colors.grey),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: const Text(
+                          "Cancel",
+                          style: TextStyle(color: Colors.grey),
                         ),
-                        child: const Text("Cancel"),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close Dialog
-                          _generateReport(startDate, endDate); // Generate PDF
-                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[800],
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _generateReport(startDate, endDate);
+                        },
                         child: const Text("Print PDF"),
                       ),
                     ),
@@ -138,7 +129,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade300),
           borderRadius: BorderRadius.circular(10),
@@ -159,11 +150,10 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               style: TextStyle(
                 color: Colors.blue[800],
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
               ),
             ),
             const SizedBox(width: 8),
-            Icon(Icons.calendar_today, size: 18, color: Colors.blue[800]),
+            Icon(Icons.calendar_today, size: 16, color: Colors.blue[800]),
           ],
         ),
       ),
@@ -171,7 +161,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   }
 
   Future<void> _generateReport(DateTime start, DateTime end) async {
-    // Check Date Validity
     if (start.isAfter(end)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -190,7 +179,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     );
 
     try {
-      // Fetch Data
       final querySnapshot = await FirebaseFirestore.instance
           .collection('customers')
           .doc(widget.customerId)
@@ -198,11 +186,9 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           .orderBy('date', descending: true)
           .get();
 
-      // Filter Data Locally
       final filteredDocs = querySnapshot.docs.where((doc) {
         final data = doc.data();
         final date = DateTime.parse(data['date']);
-        // Normalize dates to remove time part for accurate comparison
         final normalizeDate = DateTime(date.year, date.month, date.day);
         final normalizeStart = DateTime(start.year, start.month, start.day);
         final normalizeEnd = DateTime(end.year, end.month, end.day);
@@ -214,6 +200,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       }).toList();
 
       if (filteredDocs.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("No transactions found in this period."),
@@ -223,25 +210,23 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         return;
       }
 
-      final transactions = filteredDocs.map((e) => e.data()).toList();
-
-      // Call PDF Generator
-      await PdfGenerator.generateAndPrint(
+      // SIXITAANKA: generateAndPrint -> generateStatement
+      await PdfGenerator.generateStatement(
         widget.customerName,
         widget.customerPhone,
         start,
         end,
-        transactions,
+        filteredDocs.map((e) => e.data()).toList(),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
       );
     }
   }
 
-  // ---------------- END REPORT LOGIC ----------------
-
+  // ---------------- 2. TRANSACTION LOGIC (FIXED) ----------------
   void _showTransactionDialog(BuildContext context, bool isDeposit) {
     final TextEditingController amountCtrl = TextEditingController();
     final TextEditingController descCtrl = TextEditingController();
@@ -291,7 +276,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               controller: descCtrl,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                labelText: "Description (Optional)",
+                labelText: "Description",
                 hintText: "e.g. Cash, Bank Transfer",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -319,16 +304,62 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   final amount = double.tryParse(amountText);
                   if (amount == null || amount <= 0) return;
 
+                  // --- CRITICAL: CHECK BALANCE FOR WITHDRAWAL ---
+                  if (!isDeposit) {
+                    // Fetch fresh balance
+                    final docSnap = await FirebaseFirestore.instance
+                        .collection('customers')
+                        .doc(widget.customerId)
+                        .get();
+                    if (docSnap.exists) {
+                      final data = docSnap.data() as Map<String, dynamic>;
+                      // Ensure numbers are doubles to avoid type errors
+                      final double amtIn = (data['amountIn'] ?? 0).toDouble();
+                      final double amtOut = (data['amountOut'] ?? 0).toDouble();
+                      final currentBalance = amtIn - amtOut;
+
+                      if (currentBalance < amount) {
+                        // SHOW ERROR DIALOG HERE INSTEAD OF SNACKBAR
+                        if (!context.mounted) return;
+
+                        // Close BottomSheet first so Dialog shows clearly
+                        // Navigator.pop(context);
+
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text(
+                              "Insufficient Funds",
+                              style: TextStyle(color: Colors.red),
+                            ),
+                            content: Text(
+                              "You cannot withdraw \$${amount.toStringAsFixed(2)}.\nCurrent Balance: \$${currentBalance.toStringAsFixed(2)}",
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text("OK"),
+                              ),
+                            ],
+                          ),
+                        );
+                        return; // STOP TRANSACTION
+                      }
+                    }
+                  }
+                  // ----------------------------------------------
+
                   final desc = descCtrl.text.isEmpty
                       ? (isDeposit ? "Deposit" : "Withdrawal")
                       : descCtrl.text;
 
                   final now = DateTime.now().toIso8601String();
 
-                  Navigator.pop(context);
+                  if (!context.mounted) return;
+                  Navigator.pop(context); // Close BottomSheet
 
                   try {
-                    // Transaction Log
+                    // 1. Add to Transaction History
                     await FirebaseFirestore.instance
                         .collection('customers')
                         .doc(widget.customerId)
@@ -340,17 +371,18 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                           'description': desc,
                         });
 
-                    // Update Balance & updatedAt
+                    // 2. Update Balance & updatedAt (FIXED FOR SAFETY)
+                    // We use set with merge or update. Update is safer if doc exists.
                     await FirebaseFirestore.instance
                         .collection('customers')
                         .doc(widget.customerId)
                         .update({
                           'amountIn': isDeposit
                               ? FieldValue.increment(amount)
-                              : FieldValue.increment(0),
+                              : FieldValue.increment(0.0),
                           'amountOut': !isDeposit
                               ? FieldValue.increment(amount)
-                              : FieldValue.increment(0),
+                              : FieldValue.increment(0.0),
                           'updatedAt': now,
                         });
 
@@ -417,12 +449,10 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // CUSTOM PRINT BUTTON
           IconButton(
             icon: const Icon(Icons.print),
             tooltip: "Print Statement",
-            onPressed:
-                _showCustomDateRangePicker, // <--- Wuxuu furayaa Dialog-ga cusub
+            onPressed: _showCustomDateRangePicker,
           ),
           IconButton(
             icon: const Icon(Icons.edit),
@@ -449,6 +479,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       ),
       body: Column(
         children: [
+          // TOTAL BALANCE CARD
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
@@ -540,6 +571,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
 
           const SizedBox(height: 10),
 
+          // TRANSACTION LIST
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance

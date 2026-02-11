@@ -24,7 +24,6 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[100],
       ),
       home: LoginScreenModern(), // Set the home screen
-      // 🧭 Named Routes
     );
   }
 }

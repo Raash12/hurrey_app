@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hurrey_app/pages/customer_list_page.dart';
+import 'package:hurrey_app/pages/dashboard_screen.dart';
 
 /// SignUpScreen - Responsive (like login)
 class SignUpScreen extends StatefulWidget {
@@ -77,7 +78,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerListPage()),
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message ?? "Registration failed");
