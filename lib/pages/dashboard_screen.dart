@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Waxaa lagu daray Firebase Auth sxb
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hurrey_app/Auth/login_screen.dart';
 import 'add_customer_page.dart';
 import 'customer_detail_page.dart';
@@ -22,8 +22,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ValueNotifier<String> _searchNotifier = ValueNotifier<String>('');
 
-  // Halkan waxaan ka dhignay 'false' si uu liisku marka hore u xirnaado,
-  // marka la click-siiyo Row-ga ayuu furmayaa.
   bool _isCustomerListExpanded = false;
   int _currentPageLimit = 10;
   static const int _perPage = 10;
@@ -35,20 +33,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  void _resetPagination() {
-    if (_currentPageLimit != _perPage) {
-      setState(() {
-        _currentPageLimit = _perPage;
-      });
-    }
-  }
-
   // === LOGOUT LOGIC ===
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-      barrierDismissible:
-          false, // Si uusan meel bannaanka ah u click-siiyin asagoo ku dhex jira doorashada
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
@@ -92,16 +81,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                // 1. xir dialog-ga marka hore
                 Navigator.pop(dialogContext);
-
                 try {
-                  // 2. Ka saar Firebase session-ka (Sign out)
                   await FirebaseAuth.instance.signOut();
-
                   if (!context.mounted) return;
 
-                  // 3. Muuji farriinta guusha
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Waad ka baxday akoonkaaga sxb!"),
@@ -109,7 +93,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   );
 
-                  // 4. U tuur dhanka Login Page oo tirtir dhamaan xasuustii hore (Clear Navigation Stack)
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(
                       builder: (_) => const LoginScreenModern(),
@@ -178,9 +161,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // Soo akhrinta xogta tooska ah ee Firestore
         stream: FirebaseFirestore.instance
             .collection('addCustomer')
-            .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -194,7 +177,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             );
           }
 
-          final allDocs = snapshot.data?.docs ?? [];
+          var allDocs = snapshot.data?.docs ?? [];
+
+          // === HABEEYNTA (SORTING) ===
+          // Qofkii ugu dambeeyay ee la update gareeyo (Edit, Cash In, Cash Out, Debt) ayaa kor maraya
+          allDocs.sort((a, b) {
+            final dataA = a.data() as Map<String, dynamic>;
+            final dataB = b.data() as Map<String, dynamic>;
+
+            final DateTime timeA =
+                (dataA['updatedAt'] as Timestamp?)?.toDate() ??
+                (dataA['createdAt'] as Timestamp?)?.toDate() ??
+                DateTime(2000);
+
+            final DateTime timeB =
+                (dataB['updatedAt'] as Timestamp?)?.toDate() ??
+                (dataB['createdAt'] as Timestamp?)?.toDate() ??
+                DateTime(2000);
+
+            return timeB.compareTo(
+              timeA,
+            ); // Descending order (Kuwa cusub ayaa kor u soo baxaya)
+          });
+
           final stats = _calculateStats(allDocs);
 
           return SingleChildScrollView(
@@ -286,7 +291,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 const SizedBox(height: 10),
 
-                // === LIST-KII OO KALIYA SOO BAXAYA MARKA CLICK LA SIIYO ===
                 if (_isCustomerListExpanded)
                   ValueListenableBuilder<String>(
                     valueListenable: _searchNotifier,
@@ -295,9 +299,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         allDocs,
                         searchQuery,
                       );
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _resetPagination();
-                      });
+
+                      // Halkan waxaa laga saaray `_resetPagination()` oo keeni jirtay dhibaato xagga dib-u-habaynta ah (Build loop)
                       return _buildCustomerList(filteredDocs);
                     },
                   )
@@ -331,29 +334,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // === XISAABTA (TOTAL DEBT, IN, OUT) ===
+  // === STATS LOGIC ===
   _Stats _calculateStats(List<QueryDocumentSnapshot> docs) {
-    double totalInPlus = 0.0;
+    double totalNetBalance = 0.0;
     double totalOut = 0.0;
     double totalDebt = 0.0;
 
     for (var doc in docs) {
       final data = doc.data() as Map<String, dynamic>;
-      final currentIn = (data['totalIn'] ?? 0.0).toDouble();
       final currentBalance = (data['totalBalance'] ?? 0.0).toDouble();
+      final currentDebt = (data['totalDebt'] ?? 0.0).toDouble();
 
-      if (currentIn >= 0) {
-        totalInPlus += currentIn;
+      if (currentBalance >= 0) {
+        totalNetBalance += currentBalance;
       }
 
       totalOut += (data['totalOut'] ?? 0.0).toDouble();
-
-      if (currentBalance < 0) {
-        totalDebt += currentBalance;
-      }
+      totalDebt += currentDebt;
     }
+
     return _Stats(
-      totalInPlus: totalInPlus,
+      totalNetBalance: totalNetBalance,
       totalOut: totalOut,
       totalDebt: totalDebt,
     );
@@ -365,9 +366,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         children: [
           _buildMainStatCard(
-            title: "Total Cash In (+)",
-            amount: stats.totalInPlus,
-            icon: Icons.arrow_downward_rounded,
+            title: "Total Net Balance (+)",
+            amount: stats.totalNetBalance,
+            icon: Icons.account_balance_wallet_rounded,
             color: primaryColor,
           ),
           const SizedBox(height: 12),
@@ -384,7 +385,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildSubStatCard(
-                  title: "Total Debt (-)",
+                  title: "Total Debt (Deynta Guud)",
                   amount: stats.totalDebt,
                   icon: Icons.remove_circle_outline_rounded,
                   color: const Color(0xFFEF4444),
@@ -499,7 +500,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   "\$${amount.toStringAsFixed(2)}",
                   style: TextStyle(
-                    color: amount < 0 ? const Color(0xFFEF4444) : primaryColor,
+                    color: color,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -748,12 +749,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class _Stats {
-  final double totalInPlus;
+  final double totalNetBalance;
   final double totalOut;
   final double totalDebt;
 
   _Stats({
-    required this.totalInPlus,
+    required this.totalNetBalance,
     required this.totalOut,
     required this.totalDebt,
   });

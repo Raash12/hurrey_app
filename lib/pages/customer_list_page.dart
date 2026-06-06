@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_customer_page.dart';
-import 'customer_detail_page.dart'; // <<< Halkan waa lagu soo daray import-ka
+import 'customer_detail_page.dart'; 
 
 class CustomerListPage extends StatefulWidget {
   const CustomerListPage({Key? key}) : super(key: key);
@@ -32,9 +32,12 @@ class _CustomerListPageState extends State<CustomerListPage> {
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // === FIIRI HALKAN SXB ===
+        // Waxaan ka beddelnay 'createdAt' oo aan ka dhignay 'updatedAt'
+        // Tani waxay damaanad qaadaysaa in qofkii ugu dambeeyay ee la update-gareeyo uu kor u soo baxo.
         stream: FirebaseFirestore.instance
             .collection('addCustomer')
-            .orderBy('createdAt', descending: true)
+            .orderBy('updatedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -81,7 +84,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
               final doc = docs[index];
               final customer = doc.data() as Map<String, dynamic>;
 
-              final String id = doc.id; // Firestore Document ID
+              final String id = doc.id; 
               final String name = customer['name'] ?? "Magac la'aan";
               final String phone = customer['phone'] ?? "Nambar la'aan";
               final double balance = (customer['totalBalance'] ?? 0.0).toDouble();
@@ -158,7 +161,6 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     ],
                   ),
                   onTap: () {
-                    // <<< ISKU XIRKA BOGGA DETAIL-KA >>>
                     Navigator.push(
                       context,
                       MaterialPageRoute(

@@ -53,9 +53,45 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
     }
   }
 
-  // --- DHALINTA PDF REPORT (PRINT FUNCTION WITH ENGLISH & STYLING) ---
+  // --- DHALINTA PDF REPORT - KALIYA TRANSACTIONS LOGIC ---
   Future<void> _generatePdfReport() async {
     final pdf = pw.Document();
+
+    double totalCashIn = 0.0;
+    double totalCashOut = 0.0;
+    double totalDebt = 0.0;
+
+    // KALIYA waxaan xogta ka xisaabinaynaa wixii ku jira transactions-ka la shaandheeyey sxb
+    for (var doc in filteredDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final typeStr = data['type'] ?? 'N/A';
+      final amountVal = (data['amount'] ?? 0.0).toDouble();
+
+      if (typeStr == 'CASH_IN') {
+        totalCashIn += amountVal;
+      } else if (typeStr == 'CASH_OUT') {
+        totalCashOut += amountVal;
+      } else if (typeStr == 'DEBT') {
+        totalDebt += amountVal;
+      }
+    }
+
+    // XISAABTA DYNAMIC AH (CASH_IN iyo DEBT is-baxbaxooda):
+    double calculatedIn = totalCashIn;
+    double calculatedDebt = totalDebt;
+
+    if (calculatedDebt > 0 && calculatedIn > 0) {
+      if (calculatedIn >= calculatedDebt) {
+        calculatedIn = calculatedIn - calculatedDebt;
+        calculatedDebt = 0.0;
+      } else {
+        calculatedDebt = calculatedDebt - calculatedIn;
+        calculatedIn = 0.0;
+      }
+    }
+
+    // Net Balance-ka rasmiga ah (Lacagta nadiifka ah ee u hartay ama lagu leeyahay ka sokow deynta)
+    double netBalance = calculatedIn - totalCashOut;
 
     pdf.addPage(
       pw.MultiPage(
@@ -106,7 +142,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text(
-                  "Transaction Type: $selectedFilter",
+                  "Transaction Type: All Transactions",
                   style: const pw.TextStyle(fontSize: 11),
                 ),
                 pw.Text(
@@ -117,7 +153,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
             ),
             pw.SizedBox(height: 24),
 
-            // English Table with Styled Headers
+            // Table Section
             pw.TableHelper.fromTextArray(
               headers: ['Date', 'Description', 'Type', 'Amount'],
               data: filteredDocs.map((doc) {
@@ -129,11 +165,15 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
                 final typeStr = data['type'] ?? 'N/A';
                 final amountVal = data['amount'] ?? 0;
 
+                String prefix = '';
+                if (typeStr == 'CASH_IN') prefix = '+';
+                if (typeStr == 'CASH_OUT' || typeStr == 'DEBT') prefix = '-';
+
                 return [
                   dateStr,
                   data['description'] ?? '',
                   typeStr,
-                  typeStr == 'CASH_IN' ? "+\$$amountVal" : "-\$$amountVal",
+                  "$prefix\$$amountVal",
                 ];
               }).toList(),
               border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey300),
@@ -147,9 +187,74 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
               rowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellPadding: const pw.EdgeInsets.all(8),
               cellAlignment: pw.Alignment.centerLeft,
-              cellAlignments: {
-                3: pw.Alignment.centerRight,
-              }, // Right align the amount column
+              cellAlignments: {3: pw.Alignment.centerRight},
+            ),
+
+            pw.SizedBox(height: 20),
+            pw.Divider(color: PdfColors.grey300),
+            pw.SizedBox(height: 10),
+
+            // LABADA SANDUUQ OO KALIYA TRANSACTIONS KU TIIRSAN
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                // 1. Net Balance Box
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: pw.BoxDecoration(
+                    color: netBalance < 0 ? PdfColors.red50 : PdfColors.green50,
+                    borderRadius: pw.BorderRadius.circular(6),
+                    border: pw.Border.all(color: netBalance < 0 ? PdfColors.red200 : PdfColors.green200),
+                  ),
+                  child: pw.Row(
+                    children: [
+                      pw.Text(
+                        "Net Balance: ",
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: netBalance < 0 ? PdfColors.red700 : PdfColors.green700,
+                        ),
+                      ),
+                      pw.Text(
+                        "${netBalance < 0 ? '-' : ''}\$${netBalance.abs().toStringAsFixed(2)}",
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: netBalance < 0 ? PdfColors.red700 : PdfColors.green700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 12),
+                
+                // 2. Total Debt Box
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.red50,
+                    borderRadius: pw.BorderRadius.circular(6),
+                    border: pw.Border.all(color: PdfColors.red200),
+                  ),
+                  child: pw.Row(
+                    children: [
+                      pw.Text(
+                        "Total Debt (-): ",
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.red700,
+                        ),
+                      ),
+                      pw.Text(
+                        "\$${calculatedDebt.toStringAsFixed(2)}",
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.red700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ];
         },
@@ -164,7 +269,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF0F172A);
-    const accentColor = Color(0xFF2563EB); // Dynamic Blue for the button
+    const accentColor = Color(0xFF2563EB);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -192,7 +297,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // FILTERS SECTION (ENGLISH)
+            // DROPDOWN BOX
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -229,14 +334,6 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
                             value: 'ALL',
                             child: Text("All Transactions"),
                           ),
-                          DropdownMenuItem(
-                            value: 'CASH_IN',
-                            child: Text("Cash In (+)"),
-                          ),
-                          DropdownMenuItem(
-                            value: 'CASH_OUT',
-                            child: Text("Cash Out (-)"),
-                          ),
                         ],
                         onChanged: (value) =>
                             setState(() => selectedFilter = value!),
@@ -271,9 +368,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
                                 Text(
                                   startDate == null
                                       ? "Start Date"
-                                      : DateFormat(
-                                          'dd MMM yyyy',
-                                        ).format(startDate!),
+                                      : DateFormat('dd MMM yyyy').format(startDate!),
                                   style: TextStyle(
                                     color: startDate == null
                                         ? Colors.grey
@@ -307,9 +402,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
                                 Text(
                                   endDate == null
                                       ? "End Date"
-                                      : DateFormat(
-                                          'dd MMM yyyy',
-                                        ).format(endDate!),
+                                      : DateFormat('dd MMM yyyy').format(endDate!),
                                   style: TextStyle(
                                     color: endDate == null
                                         ? Colors.grey
@@ -334,7 +427,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
 
             const Divider(height: 1),
 
-            // ENGINE STREAM & PREVIEW
+            // STREAMBUILDER OO SOO AKHRINAYA TRANSACTIONS KALIYA
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -350,38 +443,26 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
 
                   var docs = snapshot.data?.docs ?? [];
 
-                  // Sifaynta xogta (Filtering)
-                  if (selectedFilter != 'ALL') {
-                    docs = docs
-                        .where(
-                          (doc) =>
-                              (doc.data() as Map<String, dynamic>)['type'] ==
-                              selectedFilter,
-                        )
-                        .toList();
-                  }
+                  // Shaandheynta Taariikhda Start Date
                   if (startDate != null) {
                     docs = docs.where((doc) {
-                      final time =
-                          (doc.data() as Map<String, dynamic>)['createdAt']
-                              as Timestamp?;
+                      final time = (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
                       return time != null &&
                           (time.toDate().isAfter(startDate!) ||
                               time.toDate().isAtSameMomentAs(startDate!));
                     }).toList();
                   }
+
+                  // Shaandheynta Taariikhda End Date
                   if (endDate != null) {
                     docs = docs.where((doc) {
-                      final time =
-                          (doc.data() as Map<String, dynamic>)['createdAt']
-                              as Timestamp?;
+                      final time = (doc.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
                       return time != null &&
                           (time.toDate().isBefore(endDate!) ||
                               time.toDate().isAtSameMomentAs(endDate!));
                     }).toList();
                   }
 
-                  // Kaydi dukumiintiyada la sifeeyay
                   filteredDocs = docs;
 
                   return Column(
@@ -403,7 +484,7 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
                               ),
                               const SizedBox(width: 12),
                               Text(
-                                "Filtered Results: ${docs.length} Transactions",
+                                "Total Transactions: ${docs.length}",
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF1E40AF),
@@ -415,14 +496,17 @@ class _TransactionReportPageState extends State<TransactionReportPage> {
                         ),
                       ),
                       const Spacer(),
-                      // STYLED PRINT BUTTON
+                      
+                      // BUTTON-KA OO CO-ALL GAREYNAYA PDF-KA TOOSKA AH
                       Padding(
                         padding: const EdgeInsets.all(24.0),
                         child: SizedBox(
                           width: double.infinity,
                           height: 54,
                           child: ElevatedButton.icon(
-                            onPressed: docs.isEmpty ? null : _generatePdfReport,
+                            onPressed: docs.isEmpty 
+                                ? null 
+                                : () => _generatePdfReport(),
                             icon: const Icon(Icons.print, color: Colors.white),
                             label: const Text(
                               "PRINT PDF REPORT",

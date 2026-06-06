@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'transaction_report_page.dart';
+import 'edit_customer_page.dart'; // Hubi in boggaaga Edit-ka uu halkaan ku dhex jiro sxb
 
 class CustomerDetailPage extends StatelessWidget {
   final String customerId;
@@ -13,165 +14,11 @@ class CustomerDetailPage extends StatelessWidget {
     required this.name,
   }) : super(key: key);
 
-  // --- FUNCTION: MODAL-KA CASH IN / CASH OUT ---
-  void _openTransactionModal({
-    required BuildContext context,
-    required bool isCashIn,
-    required double currentAvailableBalance,
-  }) {
-    final _amountController = TextEditingController();
-    final _descriptionController = TextEditingController();
-    final _formKey = GlobalKey<FormState>();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            top: 20,
-            left: 20,
-            right: 20,
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isCashIn ? "Record Cash In (+)" : "Record Cash Out (-)",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isCashIn
-                            ? const Color(0xFF065F46)
-                            : const Color(0xFFB91C1C),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                const SizedBox(height: 10),
-
-                if (!isCashIn)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: Text(
-                      "Available Balance: \$$currentAvailableBalance",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-
-                TextFormField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: "Amount (\$)",
-                    hintText: "Enter amount",
-                    prefixIcon: const Icon(Icons.attach_money),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Please enter an amount";
-                    }
-                    double? enteredAmount = double.tryParse(value);
-                    if (enteredAmount == null || enteredAmount <= 0) {
-                      return "Please enter a valid positive number";
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _descriptionController,
-                  keyboardType: TextInputType.text,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: "Description",
-                    hintText: "Enter details (e.g., Payment for services)",
-                    prefixIcon: const Icon(Icons.description),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Please enter a description";
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                ElevatedButton(
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate()) {
-                      double amount = double.parse(
-                        _amountController.text.trim(),
-                      );
-                      String description = _descriptionController.text.trim();
-
-                      Navigator.pop(context);
-
-                      await _saveTransactionToFirebase(
-                        amount: amount,
-                        description: description,
-                        isCashIn: isCashIn,
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isCashIn
-                        ? const Color(0xFF065F46)
-                        : const Color(0xFFB91C1C),
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    "SAVE TRANSACTION",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // --- FIRESTORE DATABASE LOGIC ---
-  Future<void> _saveTransactionToFirebase({
+  // ---------- Save transaction (CASH_IN, CASH_OUT, DEBT) ----------
+  Future<void> _saveTransaction({
     required double amount,
     required String description,
-    required bool isCashIn,
+    required String type,
   }) async {
     final customerRef = FirebaseFirestore.instance
         .collection('addCustomer')
@@ -182,51 +29,96 @@ class CustomerDetailPage extends StatelessWidget {
 
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
-        DocumentSnapshot customerSnapshot = await transaction.get(customerRef);
+        final snapshot = await transaction.get(customerRef);
+        final data = snapshot.data() as Map<String, dynamic>? ?? {};
 
-        double currentBalance = 0.0;
-        double currentTotalIn = 0.0;
-        double currentTotalOut = 0.0;
+        double balance = (data['totalBalance'] ?? 0).toDouble();
+        double totalIn = (data['totalIn'] ?? 0).toDouble();
+        double totalOut = (data['totalOut'] ?? 0).toDouble();
+        double totalDebt = (data['totalDebt'] ?? 0).toDouble();
 
-        if (customerSnapshot.exists) {
-          final data = customerSnapshot.data() as Map<String, dynamic>? ?? {};
-          currentBalance = (data['totalBalance'] ?? 0).toDouble();
-          currentTotalIn = (data['totalIn'] ?? 0).toDouble();
-          currentTotalOut = (data['totalOut'] ?? 0).toDouble();
+        double actualTransactionAmount = amount;
+        bool shouldSaveTransaction = true;
+
+        if (type == 'CASH_IN') {
+          if (totalDebt > 0) {
+            if (amount >= totalDebt) {
+              double remainingAmount = amount - totalDebt;
+              totalDebt = 0;
+              totalIn += remainingAmount;
+              balance += remainingAmount;
+            } else {
+              totalDebt -= amount;
+            }
+          } else {
+            totalIn += amount;
+            balance += amount;
+          }
+        } else if (type == 'CASH_OUT') {
+          totalOut += amount;
+          balance -= amount;
+        } else if (type == 'DEBT') {
+          if (balance > 0) {
+            if (amount >= balance) {
+              double remainingDebt = amount - balance;
+              balance = 0;
+              totalDebt += remainingDebt;
+              actualTransactionAmount = remainingDebt;
+            } else {
+              balance -= amount;
+              shouldSaveTransaction = false;
+            }
+          } else {
+            totalDebt += amount;
+          }
         }
 
-        if (isCashIn) {
-          currentTotalIn += amount;
-          currentBalance += amount;
-        } else {
-          currentTotalOut += amount;
-          currentBalance -= amount;
+        if (shouldSaveTransaction) {
+          transaction.set(transactionRef, {
+            'id': transactionRef.id,
+            'customerId': customerId,
+            'amount': actualTransactionAmount,
+            'description': description,
+            'type': type,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
         }
-
-        transaction.set(transactionRef, {
-          'id': transactionRef.id,
-          'customerId': customerId,
-          'amount': isCashIn ? amount : -amount,
-          'description': description,
-          'type': isCashIn ? 'CASH_IN' : 'CASH_OUT',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
 
         transaction.update(customerRef, {
-          'totalBalance': currentBalance,
-          'totalIn': currentTotalIn,
-          'totalOut': currentTotalOut,
+          'totalBalance': balance,
+          'totalIn': totalIn,
+          'totalOut': totalOut,
+          'totalDebt': totalDebt,
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       });
     } catch (e) {
-      debugPrint("Error saving transaction: $e");
+      debugPrint('Transaction error: $e');
     }
   }
 
-  // --- PROFESIONAL FUNCTION: EDIT CUSTOMER (MODAL) ---
-  void _openEditCustomerModal(BuildContext context, String currentName) {
-    final _nameController = TextEditingController(text: currentName);
-    final _editFormKey = GlobalKey<FormState>();
+  // ---------- Modal for transactions ----------
+  void _showTransactionModal(
+    BuildContext context,
+    String type,
+    double currentBalance,
+  ) {
+    final amountCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    String title;
+    Color color;
+    if (type == 'CASH_IN') {
+      title = 'Record Cash In (+)';
+      color = const Color(0xFF065F46);
+    } else if (type == 'CASH_OUT') {
+      title = 'Record Cash Out (-)';
+      color = const Color(0xFFB91C1C);
+    } else {
+      title = 'Record Debt (Dayn)';
+      color = const Color(0xFFD97706);
+    }
 
     showModalBottomSheet(
       context: context,
@@ -234,205 +126,225 @@ class CustomerDetailPage extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            top: 20,
-            left: 20,
-            right: 20,
-          ),
-          child: Form(
-            key: _editFormKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Edit Customer Info",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: "Customer Name",
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Please enter customer name";
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (_editFormKey.currentState!.validate()) {
-                      String updatedName = _nameController.text.trim();
-                      Navigator.pop(context);
-
-                      try {
-                        await FirebaseFirestore.instance
-                            .collection('addCustomer')
-                            .doc(customerId)
-                            .update({
-                          'name': updatedName,
-                          'updatedAt': FieldValue.serverTimestamp(),
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Customer updated successfully!")),
-                        );
-                      } catch (e) {
-                        debugPrint("Error updating customer: $e");
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    "UPDATE CUSTOMER",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // --- PROFESIONAL FUNCTION: DELETE CUSTOMER (ALERT DIALOG) ---
-  void _confirmDeleteCustomer(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Row(
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          top: 20,
+          left: 20,
+          right: 20,
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.red),
-              SizedBox(width: 8),
-              Text("Delete Customer?", style: TextStyle(fontWeight: FontWeight.bold)),
+              _buildModalHeader(ctx, title, color),
+              const Divider(),
+
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Available Net Balance: \$$currentBalance',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: type == 'CASH_OUT' ? Colors.red : Colors.grey,
+                  ),
+                ),
+              ),
+
+              TextFormField(
+                controller: amountCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount (\$)',
+                  prefixIcon: const Icon(Icons.attach_money),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Enter an amount';
+                  final amount = double.tryParse(v);
+                  if (amount == null || amount <= 0)
+                    return 'Enter a positive number';
+
+                  if (type == 'CASH_OUT' && amount > currentBalance) {
+                    return 'Haraagu kuguma filna! Isticmaal DEBT hadii kale.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildDescriptionField(descCtrl),
+              const SizedBox(height: 20),
+              _buildSaveButton(ctx, type, amountCtrl, descCtrl, formKey, color),
+              const SizedBox(height: 20),
             ],
           ),
-          content: const Text(
-            "Are you sure you want to delete this customer? This action will permanent and cannot be undone.",
-            style: TextStyle(color: Colors.black54),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("CANCEL", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(dialogContext); // Xir dialog-ga
-                Navigator.pop(context); // Ka bixi bogga Detail-ka maadaama la tirtiray
-
-                try {
-                  // 1. Tirtir Macamiilka fadhiya 'addCustomer'
-                  await FirebaseFirestore.instance
-                      .collection('addCustomer')
-                      .doc(customerId)
-                      .delete();
-
-                  // 2. Sidoo kale nadiifi dhamaan transactions-kii hoos imaanayay (Optional but Professional)
-                  final txs = await FirebaseFirestore.instance
-                      .collection('transactions')
-                      .where('customerId', isEqualTo: customerId)
-                      .get();
-                  
-                  for (var doc in txs.docs) {
-                    await doc.reference.delete();
-                  }
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Customer and their data deleted successfully.")),
-                  );
-                } catch (e) {
-                  debugPrint("Error deleting customer: $e");
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
-              child: const Text("YES, DELETE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 
+  Widget _buildModalHeader(BuildContext context, String title, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDescriptionField(TextEditingController ctrl) {
+    return TextFormField(
+      controller: ctrl,
+      maxLines: 2,
+      decoration: InputDecoration(
+        labelText: 'Description',
+        prefixIcon: const Icon(Icons.description),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      validator: (v) =>
+          v == null || v.trim().isEmpty ? 'Enter a description' : null,
+    );
+  }
+
+  Widget _buildSaveButton(
+    BuildContext context,
+    String type,
+    TextEditingController amountCtrl,
+    TextEditingController descCtrl,
+    GlobalKey<FormState> formKey,
+    Color color,
+  ) {
+    return ElevatedButton(
+      onPressed: () async {
+        if (formKey.currentState!.validate()) {
+          final amount = double.parse(amountCtrl.text.trim());
+          final desc = descCtrl.text.trim();
+          Navigator.pop(context);
+          await _saveTransaction(amount: amount, description: desc, type: type);
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        minimumSize: const Size(double.infinity, 50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: const Text(
+        'SAVE TRANSACTION',
+        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+      ),
+    );
+  }
+
+  // ---------- Delete Customer ----------
+  void _deleteCustomer(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Customer?'),
+          ],
+        ),
+        content: const Text(
+          'This action is permanent and cannot be undone.',
+          style: TextStyle(color: Colors.black54),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+              try {
+                await FirebaseFirestore.instance
+                    .collection('addCustomer')
+                    .doc(customerId)
+                    .delete();
+                final txs = await FirebaseFirestore.instance
+                    .collection('transactions')
+                    .where('customerId', isEqualTo: customerId)
+                    .get();
+                for (var doc in txs.docs) {
+                  await doc.reference.delete();
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Customer deleted')),
+                  );
+                }
+              } catch (e) {
+                debugPrint('Delete error: $e');
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFB91C1C),
+            ),
+            child: const Text(
+              'YES, DELETE',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Main build ----------
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF0F172A);
-    const backgroundColor = Color(0xFFF3F4F6);
+    const bgColor = Color(0xFFF3F4F6);
 
-    double latestBalance = 0.0;
-
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('addCustomer')
-          .doc(customerId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        // Haddii xogta la tirtiro inta lagu jiro stream-ka si san qalad u dhicin
-        if (snapshot.hasData && !snapshot.data!.exists) {
-          return const Scaffold(body: Center(child: Text("Customer no longer exists.")));
-        }
-
-        if (!snapshot.hasData) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-
-        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-        final String currentLiveName = data['name'] ?? name; // Haday isbedesho magaca halkan ka qaado
-        latestBalance = (data['totalBalance'] ?? 0).toDouble();
-        dynamic totalIn = data['totalIn'] ?? 0;
-        dynamic totalOut = data['totalOut'] ?? 0;
-
-        return Scaffold(
-          backgroundColor: backgroundColor,
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0.5,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: primaryColor),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Column(
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: primaryColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('addCustomer')
+              .doc(customerId)
+              .snapshots(),
+          builder: (_, snapshot) {
+            String displayName = name;
+            if (snapshot.hasData &&
+                snapshot.data != null &&
+                snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>?;
+              displayName = data?['name'] ?? name;
+            }
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  currentLiveName,
+                  displayName,
                   style: const TextStyle(
                     color: primaryColor,
                     fontWeight: FontWeight.bold,
@@ -440,453 +352,484 @@ class CustomerDetailPage extends StatelessWidget {
                   ),
                 ),
                 const Text(
-                  "Customer Ledger Details",
+                  'Customer Ledger Details',
                   style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
-            ),
-            actions: [
-              // --- SADDEXDA DHIBCOOD EE EDIT IYO DELETE ---
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    _openEditCustomerModal(context, currentLiveName);
-                  } else if (value == 'delete') {
-                    _confirmDeleteCustomer(context);
-                  }
-                },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem<String>(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
-                        SizedBox(width: 8),
-                        Text('Edit Profile'),
-                      ],
-                    ),
+            );
+          },
+        ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'edit') {
+                // Toos ugu wac EditCustomerPage adoo u baasaya kaliya customerId sxb!
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        EditCustomerPage(customerId: customerId),
                   ),
-                  const PopupMenuItem<String>(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
-                        SizedBox(width: 8),
-                        Text('Delete Customer', style: TextStyle(color: Colors.red)),
-                      ],
+                );
+              }
+              if (value == 'delete') _deleteCustomer(context);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Edit Profile'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text(
+                      'Delete Customer',
+                      style: TextStyle(color: Colors.red),
                     ),
-                  ),
-                ],
-                icon: const Icon(Icons.more_vert, color: primaryColor),
+                  ],
+                ),
               ),
             ],
+            icon: const Icon(Icons.more_vert, color: primaryColor),
           ),
-          body: SafeArea(
+        ],
+      ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('addCustomer')
+            .doc(customerId)
+            .snapshots(),
+        builder: (context, customerSnap) {
+          if (customerSnap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (customerSnap.hasError) {
+            return Center(child: Text('Error: ${customerSnap.error}'));
+          }
+          if (!customerSnap.hasData || customerSnap.data == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final customerDoc = customerSnap.data!;
+          if (!customerDoc.exists) {
+            return const Center(child: Text('Customer no longer exists.'));
+          }
+
+          final data = customerDoc.data() as Map<String, dynamic>? ?? {};
+          final balance = (data['totalBalance'] ?? 0).toDouble();
+          final totalIn = data['totalIn'] ?? 0;
+          final totalOut = data['totalOut'] ?? 0;
+          final totalDebt = data['totalDebt'] ?? 0;
+          final currentName = data['name'] ?? name;
+
+          return SafeArea(
             child: Column(
               children: [
-                // --- KAAREEYAHA QIIMAHA (NET BALANCE) ---
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                "Net Balance",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              Text(
-                                "\$$latestBalance",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1, thickness: 1),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 12.0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                "Total In (+)",
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              Text(
-                                "\$$totalIn",
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 12.0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                "Total Out (-)",
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              Text(
-                                "\$$totalOut",
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // --- VIEW REPORTS BUTTON ---
-                        const Divider(height: 1, thickness: 1),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => TransactionReportPage(
-                                  customerId: customerId,
-                                  customerName: currentLiveName,
-                                ),
-                              ),
-                            );
-                          },
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                "VIEW REPORTS ",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 14,
-                                color: Colors.blue,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                _buildSummaryCard(
+                  balance,
+                  totalIn,
+                  totalOut,
+                  totalDebt,
+                  currentName,
+                  context,
                 ),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: const Row(
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.lock, size: 16, color: Colors.green),
                       SizedBox(width: 8),
                       Text(
-                        "Only you can see these entries",
+                        'Only you can see these entries',
                         style: TextStyle(fontSize: 13, color: Colors.grey),
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 10),
-
-                // --- DHEXDA: TRANSACTION HISTORY ---
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('transactions')
-                        .where('customerId', isEqualTo: customerId)
-                        .snapshots(),
-                    builder: (context, transactionSnapshot) {
-                      if (transactionSnapshot.hasError) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              "Error loading transactions.\nDetails: ${transactionSnapshot.error}",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        );
-                      }
-
-                      if (!transactionSnapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      List<QueryDocumentSnapshot> docs =
-                          transactionSnapshot.data!.docs;
-
-                      if (docs.isEmpty) {
-                        return const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                "Try adding your first entry",
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              SizedBox(height: 12),
-                              Icon(
-                                Icons.arrow_downward,
-                                color: Color(0xFF2563EB),
-                                size: 32,
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      // --- CLIENT-SIDE SORT ---
-                      docs.sort((a, b) {
-                        final aData = a.data() as Map<String, dynamic>;
-                        final bData = b.data() as Map<String, dynamic>;
-                        final Timestamp? aTime =
-                            aData['createdAt'] as Timestamp?;
-                        final Timestamp? bTime =
-                            bData['createdAt'] as Timestamp?;
-
-                        if (aTime == null && bTime == null) return 0;
-                        if (aTime == null) return 1;
-                        if (bTime == null) return -1;
-
-                        return bTime.compareTo(aTime);
-                      });
-
-                      return ListView.builder(
-                        itemCount: docs.length,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        itemBuilder: (context, index) {
-                          final txData =
-                              docs[index].data() as Map<String, dynamic>;
-                          final String description =
-                              txData['description'] ?? '';
-                          final double amount = (txData['amount'] ?? 0)
-                              .toDouble()
-                              .abs();
-                          final String type = txData['type'] ?? 'CASH_IN';
-                          final Timestamp? createdAt =
-                              txData['createdAt'] as Timestamp?;
-
-                          bool isCashIn = type == 'CASH_IN';
-
-                          String formattedDate = '';
-                          if (createdAt != null) {
-                            formattedDate = DateFormat(
-                              'dd Jun yyyy • hh:mm a',
-                            ).format(createdAt.toDate());
-                          } else {
-                            formattedDate = 'Just now';
-                          }
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        description,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: primaryColor,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        formattedDate,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isCashIn
-                                        ? Colors.green.shade50
-                                        : Colors.red.shade50,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    "${isCashIn ? '+ ' : '- '}\$$amount",
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: isCashIn
-                                          ? Colors.green.shade700
-                                          : Colors.red.shade700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-
-                // --- BUTTONS-KA HOOSE (CASH IN / CASH OUT) ---
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            const Text(
-                              "Record Income",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            ElevatedButton.icon(
-                              onPressed: () => _openTransactionModal(
-                                context: context,
-                                isCashIn: true,
-                                currentAvailableBalance: latestBalance,
-                              ),
-                              icon: const Icon(Icons.add, color: Colors.white),
-                              label: const Text(
-                                "CASH IN",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF065F46),
-                                minimumSize: const Size(double.infinity, 52),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            const Text(
-                              "Record Expense",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            ElevatedButton.icon(
-                              onPressed: () => _openTransactionModal(
-                                context: context,
-                                isCashIn: false,
-                                currentAvailableBalance: latestBalance,
-                              ),
-                              icon: const Icon(
-                                Icons.remove,
-                                color: Colors.white,
-                              ),
-                              label: const Text(
-                                "CASH OUT",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFB91C1C),
-                                minimumSize: const Size(double.infinity, 52),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                Expanded(child: _buildTransactionList()),
+                _buildActionButtons(context, balance),
               ],
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(
+    double balance,
+    dynamic totalIn,
+    dynamic totalOut,
+    dynamic totalDebt,
+    String customerName,
+    BuildContext context,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Net Balance',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    '\$$balance',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1),
+            _buildSummaryRow(
+              'Total In (+)',
+              '\$$totalIn',
+              const Color(0xFF065F46),
+            ),
+            _buildSummaryRow(
+              'Total Out (-)',
+              '\$$totalOut',
+              const Color(0xFFB91C1C),
+            ),
+            _buildSummaryRow(
+              'Total Debt',
+              '\$$totalDebt',
+              const Color(0xFFD97706),
+            ),
+            const Divider(height: 1, thickness: 1),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TransactionReportPage(
+                    customerId: customerId,
+                    customerName: customerName,
+                  ),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'VIEW REPORTS ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 14, color: Colors.blue),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
           ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('transactions')
+          .where('customerId', isEqualTo: customerId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const Center(child: Text('No transactions yet'));
+        }
+
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Try adding your first entry',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                SizedBox(height: 12),
+                Icon(Icons.arrow_downward, color: Color(0xFF2563EB), size: 32),
+              ],
+            ),
+          );
+        }
+
+        docs.sort((a, b) {
+          final aTime =
+              (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          final bTime =
+              (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime);
+        });
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final tx = docs[i].data() as Map<String, dynamic>;
+            final desc = tx['description'] ?? '';
+            final amount = (tx['amount'] ?? 0).toDouble().abs();
+            final type = tx['type'] ?? 'CASH_OUT';
+            final timestamp = tx['createdAt'] as Timestamp?;
+            final date = timestamp != null
+                ? DateFormat('dd MMM yyyy • hh:mm a').format(timestamp.toDate())
+                : 'Just now';
+
+            Color bgColor;
+            Color textColor;
+            String prefix;
+            if (type == 'CASH_IN') {
+              bgColor = const Color(0xFFECFDF5);
+              textColor = const Color(0xFF065F46);
+              prefix = '+ ';
+            } else if (type == 'DEBT') {
+              bgColor = const Color(0xFFFFF7ED);
+              textColor = const Color(0xFFD97706);
+              prefix = ' ';
+            } else {
+              bgColor = const Color(0xFFFEF2F2);
+              textColor = const Color(0xFFB91C1C);
+              prefix = '- ';
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              desc,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            if (type == 'DEBT') ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  "DEBT",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFB45309),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          date,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$prefix\$$amount',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
+  }
+
+  Widget _buildActionButtons(BuildContext context, double balance) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          _actionButton(
+            context,
+            'CASH_IN',
+            'CASH IN',
+            const Color(0xFF065F46),
+            Icons.add,
+            balance,
+          ),
+          const SizedBox(width: 12),
+          _actionButton(
+            context,
+            'CASH_OUT',
+            'CASH OUT',
+            const Color(0xFFB91C1C),
+            Icons.remove,
+            balance,
+          ),
+          const SizedBox(width: 12),
+          _actionButton(
+            context,
+            'DEBT',
+            'DEBT',
+            const Color(0xFFD97706),
+            Icons.money_off_csred_rounded,
+            balance,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton(
+    BuildContext context,
+    String type,
+    String label,
+    Color color,
+    IconData icon,
+    double balance,
+  ) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            _buttonCaption(type),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 6),
+          ElevatedButton.icon(
+            onPressed: () => _showTransactionModal(context, type, balance),
+            icon: Icon(icon, color: Colors.white, size: 16),
+            label: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 13,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buttonCaption(String type) {
+    switch (type) {
+      case 'CASH_IN':
+        return 'Record Income';
+      case 'CASH_OUT':
+        return 'Record Expense';
+      case 'DEBT':
+        return 'Record Debt';
+      default:
+        return '';
+    }
   }
 }
