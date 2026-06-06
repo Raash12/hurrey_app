@@ -98,7 +98,6 @@ class CustomerDetailPage extends StatelessWidget {
                     if (enteredAmount == null || enteredAmount <= 0) {
                       return "Please enter a valid positive number";
                     }
-                    // Halkan waxaa laga saaray validation-kii xannibayay haddii Cash Out uu ka weyn yahay Balance-ka.
                     return null;
                   },
                 ),
@@ -196,8 +195,6 @@ class CustomerDetailPage extends StatelessWidget {
           currentTotalOut = (data['totalOut'] ?? 0).toDouble();
         }
 
-        // Halkan laga saaray Exception-kii joojinayay transaction-ka marka uu balance-ku yaraado.
-
         if (isCashIn) {
           currentTotalIn += amount;
           currentBalance += amount;
@@ -209,7 +206,7 @@ class CustomerDetailPage extends StatelessWidget {
         transaction.set(transactionRef, {
           'id': transactionRef.id,
           'customerId': customerId,
-          'amount': isCashIn ? amount : -amount, 
+          'amount': isCashIn ? amount : -amount,
           'description': description,
           'type': isCashIn ? 'CASH_IN' : 'CASH_OUT',
           'createdAt': FieldValue.serverTimestamp(),
@@ -226,6 +223,174 @@ class CustomerDetailPage extends StatelessWidget {
     }
   }
 
+  // --- PROFESIONAL FUNCTION: EDIT CUSTOMER (MODAL) ---
+  void _openEditCustomerModal(BuildContext context, String currentName) {
+    final _nameController = TextEditingController(text: currentName);
+    final _editFormKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          child: Form(
+            key: _editFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Edit Customer Info",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: "Customer Name",
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return "Please enter customer name";
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (_editFormKey.currentState!.validate()) {
+                      String updatedName = _nameController.text.trim();
+                      Navigator.pop(context);
+
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('addCustomer')
+                            .doc(customerId)
+                            .update({
+                          'name': updatedName,
+                          'updatedAt': FieldValue.serverTimestamp(),
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Customer updated successfully!")),
+                        );
+                      } catch (e) {
+                        debugPrint("Error updating customer: $e");
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    "UPDATE CUSTOMER",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // --- PROFESIONAL FUNCTION: DELETE CUSTOMER (ALERT DIALOG) ---
+  void _confirmDeleteCustomer(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red),
+              SizedBox(width: 8),
+              Text("Delete Customer?", style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            "Are you sure you want to delete this customer? This action will permanent and cannot be undone.",
+            style: TextStyle(color: Colors.black54),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("CANCEL", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext); // Xir dialog-ga
+                Navigator.pop(context); // Ka bixi bogga Detail-ka maadaama la tirtiray
+
+                try {
+                  // 1. Tirtir Macamiilka fadhiya 'addCustomer'
+                  await FirebaseFirestore.instance
+                      .collection('addCustomer')
+                      .doc(customerId)
+                      .delete();
+
+                  // 2. Sidoo kale nadiifi dhamaan transactions-kii hoos imaanayay (Optional but Professional)
+                  final txs = await FirebaseFirestore.instance
+                      .collection('transactions')
+                      .where('customerId', isEqualTo: customerId)
+                      .get();
+                  
+                  for (var doc in txs.docs) {
+                    await doc.reference.delete();
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Customer and their data deleted successfully.")),
+                  );
+                } catch (e) {
+                  debugPrint("Error deleting customer: $e");
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
+              child: const Text("YES, DELETE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF0F172A);
@@ -233,50 +398,91 @@ class CustomerDetailPage extends StatelessWidget {
 
     double latestBalance = 0.0;
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: primaryColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              name,
-              style: const TextStyle(
-                color: primaryColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('addCustomer')
+          .doc(customerId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        // Haddii xogta la tirtiro inta lagu jiro stream-ka si san qalad u dhicin
+        if (snapshot.hasData && !snapshot.data!.exists) {
+          return const Scaffold(body: Center(child: Text("Customer no longer exists.")));
+        }
+
+        if (!snapshot.hasData) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final String currentLiveName = data['name'] ?? name; // Haday isbedesho magaca halkan ka qaado
+        latestBalance = (data['totalBalance'] ?? 0).toDouble();
+        dynamic totalIn = data['totalIn'] ?? 0;
+        dynamic totalOut = data['totalOut'] ?? 0;
+
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0.5,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: primaryColor),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  currentLiveName,
+                  style: const TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const Text(
+                  "Customer Ledger Details",
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              // --- SADDEXDA DHIBCOOD EE EDIT IYO DELETE ---
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _openEditCustomerModal(context, currentLiveName);
+                  } else if (value == 'delete') {
+                    _confirmDeleteCustomer(context);
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
+                        SizedBox(width: 8),
+                        Text('Edit Profile'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text('Delete Customer', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+                icon: const Icon(Icons.more_vert, color: primaryColor),
               ),
-            ),
-            const Text(
-              "Add Member, Book Activity etc",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('addCustomer')
-              .doc(customerId)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-            latestBalance = (data['totalBalance'] ?? 0).toDouble();
-            dynamic totalIn = data['totalIn'] ?? 0;
-            dynamic totalOut = data['totalOut'] ?? 0;
-
-            return Column(
+            ],
+          ),
+          body: SafeArea(
+            child: Column(
               children: [
                 // --- KAAREEYAHA QIIMAHA (NET BALANCE) ---
                 Padding(
@@ -376,7 +582,7 @@ class CustomerDetailPage extends StatelessWidget {
                               MaterialPageRoute(
                                 builder: (context) => TransactionReportPage(
                                   customerId: customerId,
-                                  customerName: name,
+                                  customerName: currentLiveName,
                                 ),
                               ),
                             );
@@ -510,7 +716,7 @@ class CustomerDetailPage extends StatelessWidget {
                               txData['description'] ?? '';
                           final double amount = (txData['amount'] ?? 0)
                               .toDouble()
-                              .abs(); 
+                              .abs();
                           final String type = txData['type'] ?? 'CASH_IN';
                           final Timestamp? createdAt =
                               txData['createdAt'] as Timestamp?;
@@ -677,10 +883,10 @@ class CustomerDetailPage extends StatelessWidget {
                   ),
                 ),
               ],
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

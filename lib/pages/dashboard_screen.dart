@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Waxaa lagu daray Firebase Auth sxb
+import 'package:hurrey_app/Auth/login_screen.dart';
 import 'add_customer_page.dart';
 import 'customer_detail_page.dart';
 
@@ -11,13 +13,18 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  static const primaryColor = Color(0xFF1E3A8A);
-  static const accentColor = Color(0xFF3B82F6);
+  // === MIDABADA BLUE LIGHT PALETTE ===
+  static const primaryColor = Color(0xFF0284C7); // Sky Blue adag
+  static const accentColor = Color(0xFF38BDF8); // Light Blue (Iftaya)
+  static const lightBgColor = Color(0xFFF0F9FF); // Salka hoose bulug khafiif ah
   static const cardBgColor = Colors.white;
 
   final TextEditingController _searchController = TextEditingController();
   final ValueNotifier<String> _searchNotifier = ValueNotifier<String>('');
 
+  // Halkan waxaan ka dhignay 'false' si uu liisku marka hore u xirnaado,
+  // marka la click-siiyo Row-ga ayuu furmayaa.
+  bool _isCustomerListExpanded = false;
   int _currentPageLimit = 10;
   static const int _perPage = 10;
 
@@ -36,12 +43,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // === LOGOUT LOGIC ===
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible:
+          false, // Si uusan meel bannaanka ah u click-siiyin asagoo ku dhex jira doorashada
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: [
               Container(
@@ -50,7 +62,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.red.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.logout_rounded, color: Colors.red, size: 24),
+                child: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.red,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 12),
               const Text(
@@ -65,26 +81,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text(
                 "Hubaal Maaha",
-                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Waad ka baxday akoonkaaga!")),
-                );
+              onPressed: () async {
+                // 1. xir dialog-ga marka hore
+                Navigator.pop(dialogContext);
+
+                try {
+                  // 2. Ka saar Firebase session-ka (Sign out)
+                  await FirebaseAuth.instance.signOut();
+
+                  if (!context.mounted) return;
+
+                  // 3. Muuji farriinta guusha
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Waad ka baxday akoonkaaga sxb!"),
+                      backgroundColor: primaryColor,
+                    ),
+                  );
+
+                  // 4. U tuur dhanka Login Page oo tirtir dhamaan xasuustii hore (Clear Navigation Stack)
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => const LoginScreenModern(),
+                    ),
+                    (route) => false,
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "Cillad ayaa dhacday xilligii logout-ka: $e",
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               child: const Text(
                 "Haa, Ka Bax",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -96,10 +151,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: lightBgColor,
       appBar: AppBar(
         title: const Text(
-          "Buugga Macaamiisha",
+          "Dashboard",
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 22,
@@ -111,7 +166,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.power_settings_new_rounded, color: Colors.redAccent, size: 26),
+            icon: const Icon(
+              Icons.power_settings_new_rounded,
+              color: Colors.redAccent,
+              size: 26,
+            ),
             tooltip: 'Logout',
             onPressed: () => _showLogoutDialog(context),
           ),
@@ -125,45 +184,127 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text("Cillad ayaa dhacday: ${snapshot.error}"));
+            return Center(
+              child: Text("Cillad ayaa dhacday: ${snapshot.error}"),
+            );
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: accentColor));
+            return const Center(
+              child: CircularProgressIndicator(color: primaryColor),
+            );
           }
 
           final allDocs = snapshot.data?.docs ?? [];
           final stats = _calculateStats(allDocs);
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildStatsSection(stats),
-              _buildSearchBar(),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text(
-                  "Macaamiisha Diiwángashan",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+          return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildStatsSection(stats),
+                _buildSearchBar(),
+                const SizedBox(height: 20),
+
+                // === ROW-GA "LIST CUSTOMER" ===
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade100, width: 1),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isCustomerListExpanded = !_isCustomerListExpanded;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 14.0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.supervised_user_circle_rounded,
+                                    color: primaryColor,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  const Text(
+                                    "List Customer",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: lightBgColor,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      "${allDocs.length}",
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Icon(
+                                _isCustomerListExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                color: primaryColor,
+                                size: 26,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: ValueListenableBuilder<String>(
-                  valueListenable: _searchNotifier,
-                  builder: (context, searchQuery, _) {
-                    final filteredDocs = _filterCustomers(allDocs, searchQuery);
-                    // Reset pagination when search query changes
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _resetPagination();
-                    });
-                    return _buildCustomerList(filteredDocs);
-                  },
-                ),
-              ),
-            ],
+
+                const SizedBox(height: 10),
+
+                // === LIST-KII OO KALIYA SOO BAXAYA MARKA CLICK LA SIIYO ===
+                if (_isCustomerListExpanded)
+                  ValueListenableBuilder<String>(
+                    valueListenable: _searchNotifier,
+                    builder: (context, searchQuery, _) {
+                      final filteredDocs = _filterCustomers(
+                        allDocs,
+                        searchQuery,
+                      );
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _resetPagination();
+                      });
+                      return _buildCustomerList(filteredDocs);
+                    },
+                  )
+                else
+                  const SizedBox(height: 100),
+              ],
+            ),
           );
         },
       ),
@@ -179,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
         label: const Text(
-          "Macamiil Cusub",
+          "new Customer",
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -190,19 +331,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // === STATS HELPERS ===
+  // === XISAABTA (TOTAL DEBT, IN, OUT) ===
   _Stats _calculateStats(List<QueryDocumentSnapshot> docs) {
-    double totalBalance = 0.0;
-    double totalIn = 0.0;
+    double totalInPlus = 0.0;
     double totalOut = 0.0;
+    double totalDebt = 0.0;
 
     for (var doc in docs) {
       final data = doc.data() as Map<String, dynamic>;
-      totalBalance += (data['totalBalance'] ?? 0.0).toDouble();
-      totalIn += (data['totalIn'] ?? 0.0).toDouble();
+      final currentIn = (data['totalIn'] ?? 0.0).toDouble();
+      final currentBalance = (data['totalBalance'] ?? 0.0).toDouble();
+
+      if (currentIn >= 0) {
+        totalInPlus += currentIn;
+      }
+
       totalOut += (data['totalOut'] ?? 0.0).toDouble();
+
+      if (currentBalance < 0) {
+        totalDebt += currentBalance;
+      }
     }
-    return _Stats(totalBalance: totalBalance, totalIn: totalIn, totalOut: totalOut);
+    return _Stats(
+      totalInPlus: totalInPlus,
+      totalOut: totalOut,
+      totalDebt: totalDebt,
+    );
   }
 
   Widget _buildStatsSection(_Stats stats) {
@@ -211,9 +365,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         children: [
           _buildMainStatCard(
-            title: "Net Balance Guud",
-            amount: stats.totalBalance,
-            icon: Icons.account_balance_wallet_rounded,
+            title: "Total Cash In (+)",
+            amount: stats.totalInPlus,
+            icon: Icons.arrow_downward_rounded,
             color: primaryColor,
           ),
           const SizedBox(height: 12),
@@ -221,18 +375,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Expanded(
                 child: _buildSubStatCard(
-                  title: "Total Cash In",
-                  amount: stats.totalIn,
-                  icon: Icons.arrow_downward_rounded,
-                  color: const Color(0xFF10B981),
+                  title: "Total Cash Out",
+                  amount: stats.totalOut,
+                  icon: Icons.arrow_upward_rounded,
+                  color: const Color(0xFF0EA5E9),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildSubStatCard(
-                  title: "Total Cash Out",
-                  amount: stats.totalOut,
-                  icon: Icons.arrow_upward_rounded,
+                  title: "Total Debt (-)",
+                  amount: stats.totalDebt,
+                  icon: Icons.remove_circle_outline_rounded,
                   color: const Color(0xFFEF4444),
                 ),
               ),
@@ -261,8 +415,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.25),
-            blurRadius: 12,
+            color: color.withOpacity(0.2),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -276,7 +430,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 title,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withOpacity(0.9),
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -295,7 +449,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: Colors.white, size: 28),
@@ -316,7 +470,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: cardBgColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(color: Colors.blue.shade100, width: 1),
       ),
       child: Row(
         children: [
@@ -336,7 +490,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: Colors.grey,
+                    color: Colors.blueGrey,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -344,8 +498,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 4),
                 Text(
                   "\$${amount.toStringAsFixed(2)}",
-                  style: const TextStyle(
-                    color: primaryColor,
+                  style: TextStyle(
+                    color: amount < 0 ? const Color(0xFFEF4444) : primaryColor,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -366,7 +520,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: Colors.blue.shade100),
         ),
         child: TextField(
           controller: _searchController,
@@ -375,14 +529,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
           decoration: InputDecoration(
             hintText: "Ku raadi Magac ama Telifoon...",
-            hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-            prefixIcon: const Icon(Icons.search_rounded, color: accentColor),
+            hintStyle: TextStyle(color: Colors.blue.shade300, fontSize: 14),
+            prefixIcon: const Icon(Icons.search_rounded, color: primaryColor),
             suffixIcon: ValueListenableBuilder<String>(
               valueListenable: _searchNotifier,
               builder: (context, query, _) {
                 return query.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, color: Colors.grey),
+                        icon: const Icon(
+                          Icons.clear_rounded,
+                          color: Colors.grey,
+                        ),
                         onPressed: () {
                           _searchController.clear();
                           _searchNotifier.value = "";
@@ -400,7 +557,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // === FILTER LOGIC ===
-  List<QueryDocumentSnapshot> _filterCustomers(List<QueryDocumentSnapshot> docs, String searchQuery) {
+  List<QueryDocumentSnapshot> _filterCustomers(
+    List<QueryDocumentSnapshot> docs,
+    String searchQuery,
+  ) {
     if (searchQuery.trim().isEmpty) return docs;
     final query = searchQuery.trim().toLowerCase();
     return docs.where((doc) {
@@ -411,22 +571,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
   }
 
-  // === CUSTOMER LIST WITH PAGINATION ===
+  // === CUSTOMER LIST ===
   Widget _buildCustomerList(List<QueryDocumentSnapshot> customers) {
     final hasMore = customers.length > _currentPageLimit;
     final paginated = customers.take(_currentPageLimit).toList();
 
     if (paginated.isEmpty) {
       return const Center(
-        child: Text(
-          "Wax macamiil ah oo la mid ah lama helin.",
-          style: TextStyle(color: Colors.grey, fontSize: 15),
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text(
+            "Wax macamiil ah oo la mid ah lama helin.",
+            style: TextStyle(color: Colors.grey, fontSize: 15),
+          ),
         ),
       );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
       itemCount: paginated.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == paginated.length) {
@@ -438,10 +603,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _currentPageLimit += _perPage;
                 });
               },
-              icon: const Icon(Icons.expand_more_rounded, color: accentColor),
+              icon: const Icon(Icons.expand_more_rounded, color: primaryColor),
               label: const Text(
                 "LOAD MORE (Soodari Macaamiil Kale)",
-                style: TextStyle(color: accentColor, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           );
@@ -465,17 +633,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String phone,
     required double balance,
   }) {
-    final firstLetter = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : "M";
+    final firstLetter = name.trim().isNotEmpty
+        ? name.trim()[0].toUpperCase()
+        : "M";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade100, width: 1),
+        border: Border.all(color: Colors.blue.shade50, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.01),
+            color: Colors.blue.withOpacity(0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -488,7 +658,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => CustomerDetailPage(customerId: id, name: name),
+                builder: (context) =>
+                    CustomerDetailPage(customerId: id, name: name),
               ),
             );
           },
@@ -499,11 +670,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: const Color(0xFFEFF6FF),
+                  backgroundColor: lightBgColor,
                   child: Text(
                     firstLetter,
                     style: const TextStyle(
-                      color: accentColor,
+                      color: primaryColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -519,19 +690,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: primaryColor,
+                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.phone_enabled_rounded, size: 13, color: Colors.grey.shade400),
+                          Icon(
+                            Icons.phone_enabled_rounded,
+                            size: 13,
+                            color: Colors.blue.shade300,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             phone,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
+                              color: Colors.blueGrey.shade600,
                             ),
                           ),
                         ],
@@ -544,7 +719,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     const Text(
                       "Haraaga",
-                      style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.blueGrey,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -552,7 +731,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: balance < 0 ? const Color(0xFFEF4444) : primaryColor,
+                        color: balance < 0
+                            ? const Color(0xFFEF4444)
+                            : primaryColor,
                       ),
                     ),
                   ],
@@ -566,11 +747,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// Helper class for stats
 class _Stats {
-  final double totalBalance;
-  final double totalIn;
+  final double totalInPlus;
   final double totalOut;
+  final double totalDebt;
 
-  _Stats({required this.totalBalance, required this.totalIn, required this.totalOut});
+  _Stats({
+    required this.totalInPlus,
+    required this.totalOut,
+    required this.totalDebt,
+  });
 }
