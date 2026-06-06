@@ -1,670 +1,685 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'edit_customer_page.dart';
-import 'pdf_generator.dart'; // Hubi inaad faylkan haysato
+import 'transaction_report_page.dart';
 
-class CustomerDetailPage extends StatefulWidget {
+class CustomerDetailPage extends StatelessWidget {
   final String customerId;
-  final String customerName;
-  final String customerPhone;
+  final String name;
 
   const CustomerDetailPage({
-    super.key,
+    Key? key,
     required this.customerId,
-    required this.customerName,
-    required this.customerPhone,
-  });
+    required this.name,
+  }) : super(key: key);
 
-  @override
-  State<CustomerDetailPage> createState() => _CustomerDetailPageState();
-}
+  // --- FUNCTION: MODAL-KA CASH IN / CASH OUT ---
+  void _openTransactionModal({
+    required BuildContext context,
+    required bool isCashIn,
+    required double currentAvailableBalance,
+  }) {
+    final _amountController = TextEditingController();
+    final _descriptionController = TextEditingController();
+    final _formKey = GlobalKey<FormState>();
 
-class _CustomerDetailPageState extends State<CustomerDetailPage> {
-  // ---------------- 1. PDF & DATE PICKER LOGIC ----------------
-  void _showCustomDateRangePicker() {
-    DateTime startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
-    DateTime endDate = DateTime.now();
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Column(
-                children: [
-                  Icon(Icons.date_range, size: 40, color: Colors.blue[800]),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Select Period",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  const Text(
-                    "Choose date range for report",
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildDateSelector(
-                    label: "From:",
-                    date: startDate,
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: startDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null)
-                        setStateDialog(() => startDate = picked);
-                    },
-                  ),
-                  const SizedBox(height: 15),
-                  _buildDateSelector(
-                    label: "To:",
-                    date: endDate,
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: endDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null)
-                        setStateDialog(() => endDate = picked);
-                    },
-                  ),
-                ],
-              ),
-              actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              actions: [
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text(
-                          "Cancel",
-                          style: TextStyle(color: Colors.grey),
-                        ),
+                    Text(
+                      isCashIn ? "Record Cash In (+)" : "Record Cash Out (-)",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isCashIn
+                            ? const Color(0xFF065F46)
+                            : const Color(0xFFB91C1C),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[800],
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _generateReport(startDate, endDate);
-                        },
-                        child: const Text("Print PDF"),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
+                const Divider(),
+                const SizedBox(height: 10),
+
+                if (!isCashIn)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Text(
+                      "Available Balance: \$$currentAvailableBalance",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+
+                TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: "Amount (\$)",
+                    hintText: "Enter amount",
+                    prefixIcon: const Icon(Icons.attach_money),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return "Please enter an amount";
+                    }
+                    double? enteredAmount = double.tryParse(value);
+                    if (enteredAmount == null || enteredAmount <= 0) {
+                      return "Please enter a valid positive number";
+                    }
+                    // Halkan waxaa laga saaray validation-kii xannibayay haddii Cash Out uu ka weyn yahay Balance-ka.
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _descriptionController,
+                  keyboardType: TextInputType.text,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: "Description",
+                    hintText: "Enter details (e.g., Payment for services)",
+                    prefixIcon: const Icon(Icons.description),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return "Please enter a description";
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                ElevatedButton(
+                  onPressed: () async {
+                    if (_formKey.currentState!.validate()) {
+                      double amount = double.parse(
+                        _amountController.text.trim(),
+                      );
+                      String description = _descriptionController.text.trim();
+
+                      Navigator.pop(context);
+
+                      await _saveTransactionToFirebase(
+                        amount: amount,
+                        description: description,
+                        isCashIn: isCashIn,
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isCashIn
+                        ? const Color(0xFF065F46)
+                        : const Color(0xFFB91C1C),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    "SAVE TRANSACTION",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
-            );
-          },
+            ),
+          ),
         );
       },
     );
   }
 
-  Widget _buildDateSelector({
-    required String label,
-    required DateTime date,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(10),
-          color: Colors.grey.shade50,
-        ),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              DateFormat('dd MMM yyyy').format(date),
-              style: TextStyle(
-                color: Colors.blue[800],
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.calendar_today, size: 16, color: Colors.blue[800]),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _generateReport(DateTime start, DateTime end) async {
-    if (start.isAfter(end)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Start Date cannot be after End Date"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Generating PDF..."),
-        duration: Duration(seconds: 1),
-      ),
-    );
+  // --- FIRESTORE DATABASE LOGIC ---
+  Future<void> _saveTransactionToFirebase({
+    required double amount,
+    required String description,
+    required bool isCashIn,
+  }) async {
+    final customerRef = FirebaseFirestore.instance
+        .collection('addCustomer')
+        .doc(customerId);
+    final transactionRef = FirebaseFirestore.instance
+        .collection('transactions')
+        .doc();
 
     try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('customers')
-          .doc(widget.customerId)
-          .collection('transactions')
-          .orderBy('date', descending: true)
-          .get();
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        DocumentSnapshot customerSnapshot = await transaction.get(customerRef);
 
-      final filteredDocs = querySnapshot.docs.where((doc) {
-        final data = doc.data();
-        final date = DateTime.parse(data['date']);
-        final normalizeDate = DateTime(date.year, date.month, date.day);
-        final normalizeStart = DateTime(start.year, start.month, start.day);
-        final normalizeEnd = DateTime(end.year, end.month, end.day);
+        double currentBalance = 0.0;
+        double currentTotalIn = 0.0;
+        double currentTotalOut = 0.0;
 
-        return (normalizeDate.isAtSameMomentAs(normalizeStart) ||
-                normalizeDate.isAfter(normalizeStart)) &&
-            (normalizeDate.isAtSameMomentAs(normalizeEnd) ||
-                normalizeDate.isBefore(normalizeEnd));
-      }).toList();
+        if (customerSnapshot.exists) {
+          final data = customerSnapshot.data() as Map<String, dynamic>? ?? {};
+          currentBalance = (data['totalBalance'] ?? 0).toDouble();
+          currentTotalIn = (data['totalIn'] ?? 0).toDouble();
+          currentTotalOut = (data['totalOut'] ?? 0).toDouble();
+        }
 
-      if (filteredDocs.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("No transactions found in this period."),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
+        // Halkan laga saaray Exception-kii joojinayay transaction-ka marka uu balance-ku yaraado.
 
-      // SIXITAANKA: generateAndPrint -> generateStatement
-      await PdfGenerator.generateStatement(
-        widget.customerName,
-        widget.customerPhone,
-        start,
-        end,
-        filteredDocs.map((e) => e.data()).toList(),
-      );
+        if (isCashIn) {
+          currentTotalIn += amount;
+          currentBalance += amount;
+        } else {
+          currentTotalOut += amount;
+          currentBalance -= amount;
+        }
+
+        transaction.set(transactionRef, {
+          'id': transactionRef.id,
+          'customerId': customerId,
+          'amount': isCashIn ? amount : -amount, 
+          'description': description,
+          'type': isCashIn ? 'CASH_IN' : 'CASH_OUT',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(customerRef, {
+          'totalBalance': currentBalance,
+          'totalIn': currentTotalIn,
+          'totalOut': currentTotalOut,
+        });
+      });
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
+      debugPrint("Error saving transaction: $e");
     }
-  }
-
-  // ---------------- 2. TRANSACTION LOGIC (FIXED) ----------------
-  void _showTransactionDialog(BuildContext context, bool isDeposit) {
-    final TextEditingController amountCtrl = TextEditingController();
-    final TextEditingController descCtrl = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 20,
-          left: 20,
-          right: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isDeposit ? "Add Money (Deposit)" : "Take Money (Withdraw)",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDeposit ? Colors.green[700] : Colors.red[700],
-              ),
-            ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: "Amount",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                prefixIcon: const Icon(Icons.attach_money),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: descCtrl,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: "Description",
-                hintText: "e.g. Cash, Bank Transfer",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                prefixIcon: const Icon(Icons.notes),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDeposit
-                      ? Colors.green[700]
-                      : Colors.red[700],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: () async {
-                  final amountText = amountCtrl.text;
-                  if (amountText.isEmpty) return;
-                  final amount = double.tryParse(amountText);
-                  if (amount == null || amount <= 0) return;
-
-                  // --- CRITICAL: CHECK BALANCE FOR WITHDRAWAL ---
-                  if (!isDeposit) {
-                    // Fetch fresh balance
-                    final docSnap = await FirebaseFirestore.instance
-                        .collection('customers')
-                        .doc(widget.customerId)
-                        .get();
-                    if (docSnap.exists) {
-                      final data = docSnap.data() as Map<String, dynamic>;
-                      // Ensure numbers are doubles to avoid type errors
-                      final double amtIn = (data['amountIn'] ?? 0).toDouble();
-                      final double amtOut = (data['amountOut'] ?? 0).toDouble();
-                      final currentBalance = amtIn - amtOut;
-
-                      if (currentBalance < amount) {
-                        // SHOW ERROR DIALOG HERE INSTEAD OF SNACKBAR
-                        if (!context.mounted) return;
-
-                        // Close BottomSheet first so Dialog shows clearly
-                        // Navigator.pop(context);
-
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text(
-                              "Insufficient Funds",
-                              style: TextStyle(color: Colors.red),
-                            ),
-                            content: Text(
-                              "You cannot withdraw \$${amount.toStringAsFixed(2)}.\nCurrent Balance: \$${currentBalance.toStringAsFixed(2)}",
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text("OK"),
-                              ),
-                            ],
-                          ),
-                        );
-                        return; // STOP TRANSACTION
-                      }
-                    }
-                  }
-                  // ----------------------------------------------
-
-                  final desc = descCtrl.text.isEmpty
-                      ? (isDeposit ? "Deposit" : "Withdrawal")
-                      : descCtrl.text;
-
-                  final now = DateTime.now().toIso8601String();
-
-                  if (!context.mounted) return;
-                  Navigator.pop(context); // Close BottomSheet
-
-                  try {
-                    // 1. Add to Transaction History
-                    await FirebaseFirestore.instance
-                        .collection('customers')
-                        .doc(widget.customerId)
-                        .collection('transactions')
-                        .add({
-                          'amount': amount,
-                          'type': isDeposit ? 'in' : 'out',
-                          'date': now,
-                          'description': desc,
-                        });
-
-                    // 2. Update Balance & updatedAt (FIXED FOR SAFETY)
-                    // We use set with merge or update. Update is safer if doc exists.
-                    await FirebaseFirestore.instance
-                        .collection('customers')
-                        .doc(widget.customerId)
-                        .update({
-                          'amountIn': isDeposit
-                              ? FieldValue.increment(amount)
-                              : FieldValue.increment(0.0),
-                          'amountOut': !isDeposit
-                              ? FieldValue.increment(amount)
-                              : FieldValue.increment(0.0),
-                          'updatedAt': now,
-                        });
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Transaction Saved"),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Error: $e"),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                },
-                child: Text(
-                  isDeposit ? "CONFIRM DEPOSIT" : "CONFIRM WITHDRAWAL",
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Customer"),
-        content: const Text("This will delete the customer. Are you sure?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('customers')
-                  .doc(widget.customerId)
-                  .delete();
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-            },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF0F172A);
+    const backgroundColor = Color(0xFFF3F4F6);
+
+    double latestBalance = 0.0;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: Text(widget.customerName),
-        backgroundColor: Colors.blue[800],
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.print),
-            tooltip: "Print Statement",
-            onPressed: _showCustomDateRangePicker,
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditCustomerPage(
-                    customerId: widget.customerId,
-                    customerData: {
-                      'name': widget.customerName,
-                      'phone': widget.customerPhone,
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: primaryColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              style: const TextStyle(
+                color: primaryColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const Text(
+              "Add Member, Book Activity etc",
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+      body: SafeArea(
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('addCustomer')
+              .doc(customerId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+            latestBalance = (data['totalBalance'] ?? 0).toDouble();
+            dynamic totalIn = data['totalIn'] ?? 0;
+            dynamic totalOut = data['totalOut'] ?? 0;
+
+            return Column(
+              children: [
+                // --- KAAREEYAHA QIIMAHA (NET BALANCE) ---
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "Net Balance",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: primaryColor,
+                                ),
+                              ),
+                              Text(
+                                "\$$latestBalance",
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, thickness: 1),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "Total In (+)",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: primaryColor,
+                                ),
+                              ),
+                              Text(
+                                "\$$totalIn",
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "Total Out (-)",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: primaryColor,
+                                ),
+                              ),
+                              Text(
+                                "\$$totalOut",
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // --- VIEW REPORTS BUTTON ---
+                        const Divider(height: 1, thickness: 1),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TransactionReportPage(
+                                  customerId: customerId,
+                                  customerName: name,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "VIEW REPORTS ",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 14,
+                                color: Colors.blue,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock, size: 16, color: Colors.green),
+                      SizedBox(width: 8),
+                      Text(
+                        "Only you can see these entries",
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // --- DHEXDA: TRANSACTION HISTORY ---
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('transactions')
+                        .where('customerId', isEqualTo: customerId)
+                        .snapshots(),
+                    builder: (context, transactionSnapshot) {
+                      if (transactionSnapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              "Error loading transactions.\nDetails: ${transactionSnapshot.error}",
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        );
+                      }
+
+                      if (!transactionSnapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      List<QueryDocumentSnapshot> docs =
+                          transactionSnapshot.data!.docs;
+
+                      if (docs.isEmpty) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Try adding your first entry",
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryColor,
+                                ),
+                              ),
+                              SizedBox(height: 12),
+                              Icon(
+                                Icons.arrow_downward,
+                                color: Color(0xFF2563EB),
+                                size: 32,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // --- CLIENT-SIDE SORT ---
+                      docs.sort((a, b) {
+                        final aData = a.data() as Map<String, dynamic>;
+                        final bData = b.data() as Map<String, dynamic>;
+                        final Timestamp? aTime =
+                            aData['createdAt'] as Timestamp?;
+                        final Timestamp? bTime =
+                            bData['createdAt'] as Timestamp?;
+
+                        if (aTime == null && bTime == null) return 0;
+                        if (aTime == null) return 1;
+                        if (bTime == null) return -1;
+
+                        return bTime.compareTo(aTime);
+                      });
+
+                      return ListView.builder(
+                        itemCount: docs.length,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        itemBuilder: (context, index) {
+                          final txData =
+                              docs[index].data() as Map<String, dynamic>;
+                          final String description =
+                              txData['description'] ?? '';
+                          final double amount = (txData['amount'] ?? 0)
+                              .toDouble()
+                              .abs(); 
+                          final String type = txData['type'] ?? 'CASH_IN';
+                          final Timestamp? createdAt =
+                              txData['createdAt'] as Timestamp?;
+
+                          bool isCashIn = type == 'CASH_IN';
+
+                          String formattedDate = '';
+                          if (createdAt != null) {
+                            formattedDate = DateFormat(
+                              'dd Jun yyyy • hh:mm a',
+                            ).format(createdAt.toDate());
+                          } else {
+                            formattedDate = 'Just now';
+                          }
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        description,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        formattedDate,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isCashIn
+                                        ? Colors.green.shade50
+                                        : Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    "${isCashIn ? '+ ' : '- '}\$$amount",
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: isCashIn
+                                          ? Colors.green.shade700
+                                          : Colors.red.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
                     },
                   ),
                 ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: _showDeleteDialog,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // TOTAL BALANCE CARD
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
-            decoration: BoxDecoration(
-              color: Colors.blue[800],
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(30),
-              ),
-            ),
-            child: Column(
-              children: [
-                const Text(
-                  "Total Balance",
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('customers')
-                      .doc(widget.customerId)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox(height: 40);
-                    final data = snapshot.data!.data() as Map<String, dynamic>?;
-                    if (data == null) return const Text("Deleted");
 
-                    final balance =
-                        (data['amountIn'] ?? 0) - (data['amountOut'] ?? 0);
-                    return Text(
-                      "\$${balance.toStringAsFixed(2)}",
-                      style: const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.arrow_downward),
-                        label: const Text("DEPOSIT"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[600],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                // --- BUTTONS-KA HOOSE (CASH IN / CASH OUT) ---
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text(
+                              "Record Income",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ElevatedButton.icon(
+                              onPressed: () => _openTransactionModal(
+                                context: context,
+                                isCashIn: true,
+                                currentAvailableBalance: latestBalance,
+                              ),
+                              icon: const Icon(Icons.add, color: Colors.white),
+                              label: const Text(
+                                "CASH IN",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF065F46),
+                                minimumSize: const Size(double.infinity, 52),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        onPressed: () => _showTransactionDialog(context, true),
                       ),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.arrow_upward),
-                        label: const Text("WITHDRAW"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[400],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text(
+                              "Record Expense",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ElevatedButton.icon(
+                              onPressed: () => _openTransactionModal(
+                                context: context,
+                                isCashIn: false,
+                                currentAvailableBalance: latestBalance,
+                              ),
+                              icon: const Icon(
+                                Icons.remove,
+                                color: Colors.white,
+                              ),
+                              label: const Text(
+                                "CASH OUT",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFB91C1C),
+                                minimumSize: const Size(double.infinity, 52),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        onPressed: () => _showTransactionDialog(context, false),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "History",
-                style: TextStyle(
-                  color: Colors.grey[800],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // TRANSACTION LIST
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('customers')
-                  .doc(widget.customerId)
-                  .collection('transactions')
-                  .orderBy('date', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final docs = snapshot.data?.docs ?? [];
-
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "No transactions yet",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: docs.length,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final isDeposit = data['type'] == 'in';
-                    final date = DateTime.parse(data['date']);
-                    final dateString = DateFormat('dd MMM yyyy').format(date);
-                    final timeString = DateFormat('hh:mm a').format(date);
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isDeposit
-                                ? Colors.green[50]
-                                : Colors.red[50],
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isDeposit
-                                ? Icons.arrow_downward
-                                : Icons.arrow_upward,
-                            color: isDeposit ? Colors.green : Colors.red,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          data['description'] ?? "Transaction",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          "$dateString • $timeString",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                        trailing: Text(
-                          "${isDeposit ? '+' : '-'} \$${data['amount']}",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: isDeposit
-                                ? Colors.green[700]
-                                : Colors.red[700],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }

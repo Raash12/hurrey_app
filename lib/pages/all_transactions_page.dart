@@ -1,87 +1,123 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart'; // Si aad u qaabaysid taariikhda (Haddii aadan haysan run: flutter pub add intl)
 
 class AllTransactionsPage extends StatelessWidget {
-  const AllTransactionsPage({super.key});
+  final String customerId;
+  final String customerName;
+
+  const AllTransactionsPage({
+    Key? key,
+    required this.customerId,
+    required this.customerName,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF0F172A);
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
-        title: const Text("All Transactions History"),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
+        elevation: 0.5,
+        title: Text(
+          "$customerName - Transactions",
+          style: const TextStyle(
+            color: primaryColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: primaryColor),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _getAllTransactions(),
+      body: StreamBuilder<QuerySnapshot>(
+        // 🛑 Halkaan wuxuu ka akhrinayaa collection-ka GUUD ee 'transactions' isagoo ku shaandhaynaya customerId
+        stream: FirebaseFirestore.instance
+            .collection('transactions')
+            .where('customerId', isEqualTo: customerId)
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
+          final docs = snapshot.data?.docs ?? [];
 
-          final transactions = snapshot.data ?? [];
-          if (transactions.isEmpty) {
-            return const Center(child: Text("No history found"));
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "No transactions found for this customer.",
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+            );
           }
 
           return ListView.builder(
-            itemCount: transactions.length,
+            itemCount: docs.length,
             padding: const EdgeInsets.all(16),
             itemBuilder: (context, index) {
-              final t = transactions[index];
+              final data = docs[index].data() as Map<String, dynamic>;
 
-              // Determine Color and Icon based on category
-              Color color = Colors.grey;
-              IconData icon = Icons.help;
-              bool isPositive = false;
+              double amount = (data['amount'] ?? 0).toDouble();
+              String description = data['description'] ?? '';
+              String type = data['type'] ?? 'CASH_IN';
 
-              if (t['category'] == 'Income') {
-                color = Colors.green;
-                icon = Icons.arrow_downward;
-                isPositive = true;
-              } else if (t['category'] == 'Withdraw') {
-                color = Colors.red;
-                icon = Icons.arrow_upward;
-                isPositive = false;
-              } else if (t['category'] == 'Bill') {
-                color = Colors.blueGrey;
-                icon = Icons.receipt;
-                isPositive = false;
-              } else if (t['category'] == 'Debt') {
-                color = Colors.orange;
-                icon = Icons.monetization_on;
-                isPositive = false;
+              // Qaabaynta Taariikhda
+              String formattedDate = "";
+              if (data['createdAt'] != null) {
+                DateTime dt = (data['createdAt'] as Timestamp).toDate();
+                formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(dt);
               }
 
+              bool isCashIn = type == 'CASH_IN';
+
               return Card(
-                margin: const EdgeInsets.only(bottom: 10),
+                color: Colors.white,
+                elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: Colors.grey.shade200),
                 ),
-                elevation: 1,
+                margin: const EdgeInsets.all(6),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: color.withOpacity(0.1),
-                    child: Icon(icon, color: color, size: 20),
+                    backgroundColor: isCashIn
+                        ? const Color(0xFFD1FAE5)
+                        : const Color(0xFFFEE2E2),
+                    child: Icon(
+                      isCashIn ? Icons.arrow_downward : Icons.arrow_upward,
+                      color: isCashIn
+                          ? const Color(0xFF065F46)
+                          : const Color(0xFFB91C1C),
+                    ),
                   ),
                   title: Text(
-                    t['title'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    description,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: primaryColor,
+                    ),
                   ),
-                  subtitle: Text("${t['date']} • ${t['category']}"),
+                  subtitle: Text(
+                    formattedDate,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   trailing: Text(
-                    "${isPositive ? '+' : '-'} \$${t['amount']}",
+                    "${isCashIn ? '+' : '-'}\$$amount",
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: color,
+                      fontWeight: FontWeight.bold,
+                      color: isCashIn
+                          ? const Color(0xFF065F46)
+                          : const Color(0xFFB91C1C),
                     ),
                   ),
                 ),
@@ -91,70 +127,5 @@ class AllTransactionsPage extends StatelessWidget {
         },
       ),
     );
-  }
-
-  // --- MERGE ALL STREAMS ---
-  Stream<List<Map<String, dynamic>>> _getAllTransactions() {
-    // We combine distinct calls into one list using asyncMap
-    return Stream.fromFuture(Future.value([])).asyncMap((_) async {
-      List<Map<String, dynamic>> allItems = [];
-
-      try {
-        // 1. GET BILLS
-        final bills = await FirebaseFirestore.instance
-            .collection('bills')
-            .get();
-        for (var doc in bills.docs) {
-          allItems.add({
-            'title': doc['name'],
-            'amount': (doc['amount'] ?? 0).toString(),
-            'dateRaw': DateTime.parse(doc['date']),
-            'date': DateFormat('dd MMM').format(DateTime.parse(doc['date'])),
-            'category': 'Bill',
-          });
-        }
-
-        // 2. GET DEBTS
-        final debts = await FirebaseFirestore.instance
-            .collection('debts')
-            .get();
-        for (var doc in debts.docs) {
-          allItems.add({
-            'title': doc['name'],
-            'amount': (doc['amount'] ?? 0).toString(),
-            'dateRaw': DateTime.parse(doc['date']),
-            'date': DateFormat('dd MMM').format(DateTime.parse(doc['date'])),
-            'category': 'Debt',
-          });
-        }
-
-        // 3. GET CUSTOMER TRANSACTIONS (INCOME & WITHDRAW)
-        // Using collectionGroup to find ALL subcollections named 'transactions'
-        final customerTrans = await FirebaseFirestore.instance
-            .collectionGroup('transactions')
-            .get();
-
-        for (var doc in customerTrans.docs) {
-          final data = doc.data();
-          bool isDeposit = data['type'] == 'in' || data['type'] == 'income';
-
-          allItems.add({
-            'title':
-                data['description'] ?? (isDeposit ? "Deposit" : "Withdraw"),
-            'amount': (data['amount'] ?? 0).toString(),
-            'dateRaw': DateTime.parse(data['date']),
-            'date': DateFormat('dd MMM').format(DateTime.parse(data['date'])),
-            'category': isDeposit ? 'Income' : 'Withdraw',
-          });
-        }
-
-        // 4. SORT BY DATE (NEWEST FIRST)
-        allItems.sort((a, b) => b['dateRaw'].compareTo(a['dateRaw']));
-      } catch (e) {
-        debugPrint("Error fetching transactions: $e");
-      }
-
-      return allItems;
-    });
   }
 }

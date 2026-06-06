@@ -1,324 +1,200 @@
-// import 'package:flutter/material.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:hurrey_app/Auth/login_screen.dart'; // Hubi import-kan
-// import 'add_customer_page.dart';
-// import 'customer_detail_page.dart';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'add_customer_page.dart';
+import 'customer_detail_page.dart'; // <<< Halkan waa lagu soo daray import-ka
 
-// class CustomerListPage extends StatefulWidget {
-//   const CustomerListPage({super.key});
+class CustomerListPage extends StatefulWidget {
+  const CustomerListPage({Key? key}) : super(key: key);
 
-//   @override
-//   State<CustomerListPage> createState() => _CustomerListPageState();
-// }
+  @override
+  State<CustomerListPage> createState() => _CustomerListPageState();
+}
 
-// class _CustomerListPageState extends State<CustomerListPage> {
-//   final TextEditingController _searchCtrl = TextEditingController();
-//   String searchText = "";
+class _CustomerListPageState extends State<CustomerListPage> {
+  static const primaryColor = Color(0xFF0F172A); 
+  static const accentColor = Color(0xFF2563EB); 
 
-//   void _confirmLogout() {
-//     showDialog(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-//         title: const Text("Logout"),
-//         content: const Text("Are you sure you want to log out?"),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-//           ),
-//           ElevatedButton(
-//             style: ElevatedButton.styleFrom(
-//               backgroundColor: Colors.redAccent,
-//               shape: RoundedRectangleBorder(
-//                 borderRadius: BorderRadius.circular(8),
-//               ),
-//             ),
-//             onPressed: () async {
-//               Navigator.pop(context);
-//               await FirebaseAuth.instance.signOut();
-//               if (mounted) {
-//                 Navigator.of(context).pushReplacement(
-//                   MaterialPageRoute(builder: (_) => const LoginScreenModern()),
-//                 );
-//               }
-//             },
-//             child: const Text("Logout", style: TextStyle(color: Colors.white)),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50], 
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          "Buugga Macaamiisha",
+          style: TextStyle(
+            color: primaryColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('addCustomer')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Khalad ayaa dhacay: ${snapshot.error}",
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            );
+          }
 
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Colors.grey[50], // Very light background
-//       appBar: AppBar(
-//         title: const Text(
-//           "Customer Manager",
-//           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
-//         ),
-//         backgroundColor: Colors.blue[900],
-//         foregroundColor: Colors.white,
-//         elevation: 0,
-//         actions: [
-//           IconButton(
-//             icon: const Icon(Icons.logout_rounded),
-//             onPressed: _confirmLogout,
-//           ),
-//         ],
-//       ),
-//       body: Column(
-//         children: [
-//           // 1. HEADER SEARCH AREA
-//           Container(
-//             padding: const EdgeInsets.fromLTRB(20, 10, 20, 25),
-//             decoration: BoxDecoration(
-//               color: Colors.blue[900],
-//               borderRadius: const BorderRadius.vertical(
-//                 bottom: Radius.circular(30),
-//               ),
-//             ),
-//             child: Column(
-//               children: [
-//                 TextField(
-//                   controller: _searchCtrl,
-//                   style: const TextStyle(color: Colors.black87),
-//                   decoration: InputDecoration(
-//                     hintText: "Search by name or phone...",
-//                     hintStyle: TextStyle(color: Colors.grey[400]),
-//                     prefixIcon: const Icon(Icons.search, color: Colors.blue),
-//                     filled: true,
-//                     fillColor: Colors.white,
-//                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
-//                     border: OutlineInputBorder(
-//                       borderRadius: BorderRadius.circular(15),
-//                       borderSide: BorderSide.none,
-//                     ),
-//                     enabledBorder: OutlineInputBorder(
-//                       borderRadius: BorderRadius.circular(15),
-//                       borderSide: BorderSide.none,
-//                     ),
-//                   ),
-//                   onChanged: (val) {
-//                     setState(() {
-//                       searchText = val.toLowerCase();
-//                     });
-//                   },
-//                 ),
-//               ],
-//             ),
-//           ),
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: accentColor),
+            );
+          }
 
-//           // 2. LIST AREA
-//           Expanded(
-//             child: StreamBuilder<QuerySnapshot>(
-//               stream: FirebaseFirestore.instance
-//                   .collection("customers")
-//                   .orderBy("updatedAt", descending: true)
-//                   .snapshots(),
-//               builder: (context, snapshot) {
-//                 if (snapshot.connectionState == ConnectionState.waiting) {
-//                   return const Center(child: CircularProgressIndicator());
-//                 }
+          final docs = snapshot.data!.docs;
 
-//                 if (snapshot.hasError) {
-//                   return Center(child: Text("Error: ${snapshot.error}"));
-//                 }
+          if (docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.people_outline, size: 80, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Ma jiraan macaamiil weli diiwaangashan",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
 
-//                 final docs =
-//                     snapshot.data?.docs.where((doc) {
-//                       final data = doc.data() as Map<String, dynamic>;
-//                       final name = (data["name"] ?? "")
-//                           .toString()
-//                           .toLowerCase();
-//                       final phone = (data["phone"] ?? "")
-//                           .toString()
-//                           .toLowerCase();
-//                       return name.contains(searchText) ||
-//                           phone.contains(searchText);
-//                     }).toList() ??
-//                     [];
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final customer = doc.data() as Map<String, dynamic>;
 
-//                 if (docs.isEmpty) {
-//                   return Center(
-//                     child: Column(
-//                       mainAxisAlignment: MainAxisAlignment.center,
-//                       children: [
-//                         Icon(
-//                           Icons.person_off_outlined,
-//                           size: 60,
-//                           color: Colors.grey[300],
-//                         ),
-//                         const SizedBox(height: 10),
-//                         Text(
-//                           searchText.isEmpty
-//                               ? "No Customers Yet"
-//                               : "No Match Found",
-//                           style: TextStyle(
-//                             color: Colors.grey[500],
-//                             fontSize: 16,
-//                           ),
-//                         ),
-//                       ],
-//                     ),
-//                   );
-//                 }
+              final String id = doc.id; // Firestore Document ID
+              final String name = customer['name'] ?? "Magac la'aan";
+              final String phone = customer['phone'] ?? "Nambar la'aan";
+              final double balance = (customer['totalBalance'] ?? 0.0).toDouble();
 
-//                 return ListView.separated(
-//                   itemCount: docs.length,
-//                   padding: const EdgeInsets.symmetric(
-//                     horizontal: 16,
-//                     vertical: 20,
-//                   ),
-//                   separatorBuilder: (ctx, i) => const SizedBox(height: 12),
-//                   itemBuilder: (context, index) {
-//                     final doc = docs[index];
-//                     final data = doc.data() as Map<String, dynamic>;
-
-//                     final double amountIn = (data['amountIn'] ?? 0).toDouble();
-//                     final double amountOut = (data['amountOut'] ?? 0)
-//                         .toDouble();
-//                     final double balance = amountIn - amountOut;
-
-//                     // Color logic: Green if positive, Red if negative, Grey if 0
-//                     final balanceColor = balance > 0
-//                         ? Colors.green[700]
-//                         : (balance < 0 ? Colors.red[700] : Colors.grey[600]);
-
-//                     final name = data["name"] ?? "No Name";
-//                     final initial = name.isNotEmpty
-//                         ? name.substring(0, 1).toUpperCase()
-//                         : "?";
-
-//                     return InkWell(
-//                       onTap: () {
-//                         Navigator.push(
-//                           context,
-//                           MaterialPageRoute(
-//                             builder: (_) => CustomerDetailPage(
-//                               customerId: doc.id,
-//                               customerName: name,
-//                               customerPhone: data["phone"] ?? "",
-//                             ),
-//                           ),
-//                         );
-//                       },
-//                       borderRadius: BorderRadius.circular(16),
-//                       child: Container(
-//                         padding: const EdgeInsets.all(16),
-//                         decoration: BoxDecoration(
-//                           color: Colors.white,
-//                           borderRadius: BorderRadius.circular(16),
-//                           boxShadow: [
-//                             BoxShadow(
-//                               color: Colors.grey.withOpacity(0.08),
-//                               blurRadius: 10,
-//                               offset: const Offset(0, 4),
-//                             ),
-//                           ],
-//                         ),
-//                         child: Row(
-//                           children: [
-//                             // AVATAR
-//                             Container(
-//                               width: 50,
-//                               height: 50,
-//                               decoration: BoxDecoration(
-//                                 color: Colors.blue[50],
-//                                 shape: BoxShape.circle,
-//                               ),
-//                               child: Center(
-//                                 child: Text(
-//                                   initial,
-//                                   style: TextStyle(
-//                                     fontSize: 20,
-//                                     fontWeight: FontWeight.bold,
-//                                     color: Colors.blue[900],
-//                                   ),
-//                                 ),
-//                               ),
-//                             ),
-//                             const SizedBox(width: 15),
-
-//                             // NAME & PHONE
-//                             Expanded(
-//                               child: Column(
-//                                 crossAxisAlignment: CrossAxisAlignment.start,
-//                                 children: [
-//                                   Text(
-//                                     name,
-//                                     style: const TextStyle(
-//                                       fontWeight: FontWeight.bold,
-//                                       fontSize: 16,
-//                                       color: Colors.black87,
-//                                     ),
-//                                     maxLines: 1,
-//                                     overflow: TextOverflow.ellipsis,
-//                                   ),
-//                                   const SizedBox(height: 4),
-//                                   Text(
-//                                     data["phone"] ?? "",
-//                                     style: TextStyle(
-//                                       color: Colors.grey[500],
-//                                       fontSize: 13,
-//                                     ),
-//                                   ),
-//                                 ],
-//                               ),
-//                             ),
-
-//                             // BALANCE
-//                             Column(
-//                               crossAxisAlignment: CrossAxisAlignment.end,
-//                               children: [
-//                                 Text(
-//                                   "\$${balance.abs().toStringAsFixed(2)}",
-//                                   style: TextStyle(
-//                                     fontWeight: FontWeight.bold,
-//                                     fontSize: 16,
-//                                     color: balanceColor,
-//                                   ),
-//                                 ),
-//                                 Text(
-//                                   balance > 0
-//                                       ? "Credit"
-//                                       : (balance < 0 ? "Due" : "Settled"),
-//                                   style: TextStyle(
-//                                     fontSize: 11,
-//                                     fontWeight: FontWeight.w500,
-//                                     color: balanceColor?.withOpacity(0.8),
-//                                   ),
-//                                 ),
-//                               ],
-//                             ),
-//                             const SizedBox(width: 8),
-//                             Icon(Icons.chevron_right, color: Colors.grey[300]),
-//                           ],
-//                         ),
-//                       ),
-//                     );
-//                   },
-//                 );
-//               },
-//             ),
-//           ),
-//         ],
-//       ),
-//       floatingActionButton: FloatingActionButton.extended(
-//         onPressed: () {
-//           Navigator.push(
-//             context,
-//             MaterialPageRoute(builder: (_) => const AddCustomerPage()),
-//           );
-//         },
-//         backgroundColor: const Color.fromARGB(255, 189, 192, 244),
-//         icon: const Icon(Icons.add),
-//         label: const Text("New Customer"),
-//         elevation: 4,
-//       ),
-//     );
-//   }
-// }
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey[100]!, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.03),
+                      spreadRadius: 1,
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: CircleAvatar(
+                    backgroundColor: accentColor.withOpacity(0.1),
+                    radius: 24,
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : "?",
+                      style: const TextStyle(
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    name,
+                    style: const TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.phone, size: 14, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          phone,
+                          style: const TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        "Haraaga",
+                        style: TextStyle(color: Colors.grey, fontSize: 11),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "\$$balance",
+                        style: TextStyle(
+                          color: balance > 0
+                              ? Colors.redAccent
+                              : (balance < 0 ? Colors.green : primaryColor),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    // <<< ISKU XIRKA BOGGA DETAIL-KA >>>
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CustomerDetailPage(
+                          customerId: id,
+                          name: name,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddCustomerPage()),
+          );
+        },
+        backgroundColor: primaryColor,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          "Cusub",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
