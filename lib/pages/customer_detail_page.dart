@@ -2,20 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'transaction_report_page.dart';
-import 'edit_customer_page.dart'; // Hubi in faylkani jiro
+import 'edit_customer_page.dart';
 
 class CustomerDetailPage extends StatefulWidget {
   final String customerId;
   final String name;
 
-  const CustomerDetailPage({Key? key, required this.customerId, required this.name})
-      : super(key: key);
+  const CustomerDetailPage({
+    Key? key,
+    required this.customerId,
+    required this.name,
+  }) : super(key: key);
 
   @override
   State<CustomerDetailPage> createState() => _CustomerDetailPageState();
 }
 
 class _CustomerDetailPageState extends State<CustomerDetailPage> {
+  // ==================== COLORS (Matching Dashboard) ====================
+  static const primaryColor = Color(0xFF6C63FF);
+  static const secondaryColor = Color(0xFF4CAF50);
+  static const accentColor = Color(0xFFFF6B6B);
+  static const lightBgColor = Color(0xFFF8F9FE);
+  static const gradientStart = Color(0xFF6C63FF);
+  static const gradientEnd = Color(0xFF4CAF50);
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -31,8 +42,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     required String description,
     required String type,
   }) async {
-    final customerRef = FirebaseFirestore.instance.collection('addCustomer').doc(widget.customerId);
-    final transactionRef = FirebaseFirestore.instance.collection('transactions').doc();
+    final customerRef = FirebaseFirestore.instance
+        .collection('addCustomer')
+        .doc(widget.customerId);
+    final transactionRef = FirebaseFirestore.instance
+        .collection('transactions')
+        .doc();
 
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
@@ -44,62 +59,44 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         double totalOut = (data['totalOut'] ?? 0).toDouble();
         double totalDebt = (data['totalDebt'] ?? 0).toDouble();
 
-        double actualTransactionAmount = amount;
-        bool shouldSaveTransaction = true;
-
         if (type == 'CASH_IN') {
-          // 1) Bixi deynta marka hore
+          totalIn += amount;
           if (totalDebt > 0) {
             if (amount >= totalDebt) {
               double remaining = amount - totalDebt;
               totalDebt = 0;
-              totalIn += remaining;
               balance += remaining;
             } else {
               totalDebt -= amount;
-              // lacagtu dhan bay deynta tagtay, balance iyo totalIn waxba kuma kordhin
             }
           } else {
-            totalIn += amount;
             balance += amount;
           }
-        } 
-        else if (type == 'CASH_OUT') {
+        } else if (type == 'CASH_OUT') {
           totalOut += amount;
           balance -= amount;
-        } 
-        else if (type == 'DEBT') {
-          // DEBT waxay isticmaashaa balance-ka haddii jiro, inta ka hartayna noqotaa debt
+        } else if (type == 'DEBT') {
           if (balance > 0) {
             if (amount >= balance) {
               double remainingDebt = amount - balance;
               totalDebt += remainingDebt;
               balance = 0;
-              actualTransactionAmount = amount; // kaydi heerka dhan
             } else {
-              // lacagta oo dhan waxay ka tagtaa balance-ka, ma jiro debt cusub
               balance -= amount;
-              shouldSaveTransaction = false; // ma kaydineyno transaction haddii aanay debt soo kordhin? Sida hore waxay ahayd true, laakiin haddii aad rabto in la kaydiyo isbeddel.
-              // Aan ka dhigno true haddii aad rabto in waligood la kaydiyo
-              shouldSaveTransaction = true;
-              actualTransactionAmount = amount;
             }
           } else {
-            // balance waa 0 ama ka hooseeya, debt-ga dhan
             totalDebt += amount;
           }
         }
 
-        if (shouldSaveTransaction) {
-          transaction.set(transactionRef, {
-            'id': transactionRef.id,
-            'customerId': widget.customerId,
-            'amount': actualTransactionAmount,
-            'description': description,
-            'type': type,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-        }
+        transaction.set(transactionRef, {
+          'id': transactionRef.id,
+          'customerId': widget.customerId,
+          'amount': amount,
+          'description': description,
+          'type': type,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
 
         transaction.update(customerRef, {
           'totalBalance': balance,
@@ -129,24 +126,47 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, top: 20, left: 20, right: 20),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          top: 20,
+          left: 20,
+          right: 20,
+        ),
         child: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Edit Transaction', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-              ]),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Edit Transaction',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
               const Divider(),
               const SizedBox(height: 10),
               TextFormField(
                 controller: amountCtrl,
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Amount (\$)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount (\$)',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Enter amount';
                   final a = double.tryParse(v);
@@ -158,8 +178,14 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               TextFormField(
                 controller: descCtrl,
                 maxLines: 2,
-                decoration: InputDecoration(labelText: 'Description', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                validator: (v) => v == null || v.isEmpty ? 'Enter description' : null,
+                decoration: InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Enter description' : null,
               ),
               const SizedBox(height: 20),
               ElevatedButton(
@@ -171,8 +197,17 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     });
                   }
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, minimumSize: const Size(double.infinity, 50)),
-                child: const Text('UPDATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text(
+                  'UPDATE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
             ],
@@ -185,25 +220,24 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       final newAmount = result['amount'] as double;
       final newDescription = result['description'] as String;
 
-      final txRef = FirebaseFirestore.instance.collection('transactions').doc(transactionId);
-      await txRef.update({
-        'amount': newAmount,
-        'description': newDescription,
-        'createdAt': FieldValue.serverTimestamp(), // wakhti cusub si uu u soo baxo korka
-      });
+      final txRef = FirebaseFirestore.instance
+          .collection('transactions')
+          .doc(transactionId);
 
-      // Dib u xisaabi dhammaan transactions-ka iyadoo la raacayo order-ka chronological
+      await txRef.update({'amount': newAmount, 'description': newDescription});
       await _recalculateCustomerTotalsFromTransactions();
     }
   }
 
-  // ==================== RECALCULATE ALL TOTALS BY REPLAYING TRANSACTIONS ====================
+  // ==================== RECALCULATE ALL TOTALS ====================
   Future<void> _recalculateCustomerTotalsFromTransactions() async {
-    final customerRef = FirebaseFirestore.instance.collection('addCustomer').doc(widget.customerId);
+    final customerRef = FirebaseFirestore.instance
+        .collection('addCustomer')
+        .doc(widget.customerId);
     final transactionsSnapshot = await FirebaseFirestore.instance
         .collection('transactions')
         .where('customerId', isEqualTo: widget.customerId)
-        .orderBy('createdAt', descending: false) // chronological order
+        .orderBy('createdAt', descending: false)
         .get();
 
     double balance = 0;
@@ -214,31 +248,25 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     for (var doc in transactionsSnapshot.docs) {
       final data = doc.data();
       final type = data['type'] as String;
-      double amount = (data['amount'] as num).toDouble(); // we store positive amount
+      double amount = (data['amount'] as num).toDouble();
 
       if (type == 'CASH_IN') {
-        // Cash In: first reduce debt if any, then remainder to balance
+        totalIn += amount;
         if (totalDebt > 0) {
           if (amount >= totalDebt) {
             double remaining = amount - totalDebt;
             totalDebt = 0;
-            totalIn += remaining;
             balance += remaining;
           } else {
             totalDebt -= amount;
-            // no addition to balance or totalIn
           }
         } else {
-          totalIn += amount;
           balance += amount;
         }
-      } 
-      else if (type == 'CASH_OUT') {
+      } else if (type == 'CASH_OUT') {
         totalOut += amount;
         balance -= amount;
-      } 
-      else if (type == 'DEBT') {
-        // Debt: first use available balance, remainder becomes debt
+      } else if (type == 'DEBT') {
         if (balance > 0) {
           if (amount >= balance) {
             double remainingDebt = amount - balance;
@@ -246,7 +274,6 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             balance = 0;
           } else {
             balance -= amount;
-            // No debt added because amount fully covered by balance
           }
         } else {
           totalDebt += amount;
@@ -261,10 +288,18 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       'totalDebt': totalDebt,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   // ==================== UI MODALS ====================
-  void _showTransactionModal(BuildContext context, String type, double currentBalance) {
+  void _showTransactionModal(
+    BuildContext context,
+    String type,
+    double currentBalance,
+  ) {
     final amountCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -273,10 +308,10 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     Color color;
     if (type == 'CASH_IN') {
       title = 'Record Cash In (+)';
-      color = const Color(0xFF065F46);
+      color = secondaryColor;
     } else if (type == 'CASH_OUT') {
       title = 'Record Cash Out (-)';
-      color = const Color(0xFFB91C1C);
+      color = accentColor;
     } else {
       title = 'Record Debt (Dayn)';
       color = const Color(0xFFD97706);
@@ -285,9 +320,16 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, top: 20, left: 20, right: 20),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          top: 20,
+          left: 20,
+          right: 20,
+        ),
         child: Form(
           key: formKey,
           child: Column(
@@ -300,22 +342,31 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
                   'Available Net Balance: \$$currentBalance',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: type == 'CASH_OUT' ? Colors.red : Colors.grey),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: type == 'CASH_OUT' ? Colors.red : Colors.grey,
+                  ),
                 ),
               ),
               TextFormField(
                 controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Amount (\$)',
                   prefixIcon: const Icon(Icons.attach_money),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Enter an amount';
                   final amount = double.tryParse(v);
-                  if (amount == null || amount <= 0) return 'Enter a positive number';
-                  if (type == 'CASH_OUT' && amount > currentBalance) return 'Haraagu kuguma filna! Isticmaal DEBT hadii kale.';
+                  if (amount == null || amount <= 0)
+                    return 'Enter a positive number';
+                  if (type == 'CASH_OUT' && amount > currentBalance)
+                    return 'Haraagu kuguma filna! Isticmaal DEBT hadii kale.';
                   return null;
                 },
               ),
@@ -335,8 +386,18 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
       ],
     );
   }
@@ -350,7 +411,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         prefixIcon: const Icon(Icons.description),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      validator: (v) => v == null || v.trim().isEmpty ? 'Enter a description' : null,
+      validator: (v) =>
+          v == null || v.trim().isEmpty ? 'Enter a description' : null,
     );
   }
 
@@ -376,7 +438,10 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         minimumSize: const Size(double.infinity, 50),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      child: const Text('SAVE TRANSACTION', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+      child: const Text(
+        'SAVE TRANSACTION',
+        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+      ),
     );
   }
 
@@ -385,28 +450,51 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Delete Customer?')]),
-        content: const Text('This action is permanent and cannot be undone.', style: TextStyle(color: Colors.black54)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Customer?'),
+          ],
+        ),
+        content: const Text(
+          'This action is permanent and cannot be undone.',
+          style: TextStyle(color: Colors.black54),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               Navigator.pop(context);
               try {
-                await FirebaseFirestore.instance.collection('addCustomer').doc(widget.customerId).delete();
-                final txs = await FirebaseFirestore.instance.collection('transactions').where('customerId', isEqualTo: widget.customerId).get();
+                await FirebaseFirestore.instance
+                    .collection('addCustomer')
+                    .doc(widget.customerId)
+                    .delete();
+                final txs = await FirebaseFirestore.instance
+                    .collection('transactions')
+                    .where('customerId', isEqualTo: widget.customerId)
+                    .get();
                 for (var doc in txs.docs) await doc.reference.delete();
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Customer deleted')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Customer deleted')),
+                  );
                 }
               } catch (e) {
                 debugPrint('Delete error: $e');
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
-            child: const Text('YES, DELETE', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text(
+              'YES, DELETE',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -416,11 +504,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   // ==================== BUILD MAIN UI ====================
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF0F172A);
-    const bgColor = Color(0xFFF3F4F6);
-
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: lightBgColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -429,18 +514,33 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('addCustomer').doc(widget.customerId).snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('addCustomer')
+              .doc(widget.customerId)
+              .snapshots(),
           builder: (_, snapshot) {
             String displayName = widget.name;
-            if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+            if (snapshot.hasData &&
+                snapshot.data != null &&
+                snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>?;
               displayName = data?['name'] ?? widget.name;
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(displayName, style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 18)),
-                const Text('Customer Ledger Details', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const Text(
+                  'Customer Ledger Details',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
               ],
             );
           },
@@ -448,26 +548,61 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'edit') Navigator.push(context, MaterialPageRoute(builder: (_) => EditCustomerPage(customerId: widget.customerId)));
+              if (value == 'edit')
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        EditCustomerPage(customerId: widget.customerId),
+                  ),
+                );
               if (value == 'delete') _deleteCustomer(context);
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, color: Colors.blue), SizedBox(width: 8), Text('Edit Profile')])),
-              PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, color: Colors.red), SizedBox(width: 8), Text('Delete Customer', style: TextStyle(color: Colors.red))])),
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Edit Profile'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text(
+                      'Delete Customer',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
             ],
             icon: const Icon(Icons.more_vert, color: primaryColor),
           ),
         ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('addCustomer').doc(widget.customerId).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('addCustomer')
+            .doc(widget.customerId)
+            .snapshots(),
         builder: (context, customerSnap) {
-          if (customerSnap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (customerSnap.hasError) return Center(child: Text('Error: ${customerSnap.error}'));
-          if (!customerSnap.hasData || customerSnap.data == null) return const Center(child: CircularProgressIndicator());
+          if (customerSnap.connectionState == ConnectionState.waiting)
+            return const Center(child: CircularProgressIndicator());
+          if (customerSnap.hasError)
+            return Center(child: Text('Error: ${customerSnap.error}'));
+          if (!customerSnap.hasData || customerSnap.data == null)
+            return const Center(child: CircularProgressIndicator());
 
           final customerDoc = customerSnap.data!;
-          if (!customerDoc.exists) return const Center(child: Text('Customer no longer exists.'));
+          if (!customerDoc.exists)
+            return const Center(child: Text('Customer no longer exists.'));
 
           final data = customerDoc.data() as Map<String, dynamic>? ?? {};
           final balance = (data['totalBalance'] ?? 0).toDouble();
@@ -479,7 +614,14 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           return SafeArea(
             child: Column(
               children: [
-                _buildSummaryCard(balance, totalIn, totalOut, totalDebt, currentName, context),
+                _buildSummaryCard(
+                  balance,
+                  totalIn,
+                  totalOut,
+                  totalDebt,
+                  currentName,
+                  context,
+                ),
                 _buildSearchBar(),
                 Expanded(child: _buildTransactionList()),
                 _buildActionButtons(context, balance),
@@ -491,87 +633,130 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onSubmitted: (value) {
-                  setState(() {
-                    _searchQuery = value.trim().toLowerCase();
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: '🔍 Filter by description...',
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _searchQuery = _searchController.text.trim().toLowerCase();
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-            child: const Icon(Icons.search, color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard(double balance, dynamic totalIn, dynamic totalOut, dynamic totalDebt, String customerName, BuildContext context) {
+  // ==================== SUMMARY CARD (Matching Dashboard Style) ====================
+  Widget _buildSummaryCard(
+    double balance,
+    dynamic totalIn,
+    dynamic totalOut,
+    dynamic totalDebt,
+    String customerName,
+    BuildContext context,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [gradientStart, gradientEnd],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: primaryColor.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Net Balance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                Text('\$$balance', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              ]),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '💰 Net Balance',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$$balance',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+              ],
             ),
-            const Divider(height: 1, thickness: 1),
-            _buildSummaryRow('Total In (+)', '\$$totalIn', const Color(0xFF065F46)),
-            _buildSummaryRow('Total Out (-)', '\$$totalOut', const Color(0xFFB91C1C)),
-            _buildSummaryRow('Total Debt', '\$$totalDebt', const Color(0xFFD97706)),
-            const Divider(height: 1, thickness: 1),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildStatItem(
+                  'Total In (+)',
+                  '\$$totalIn',
+                  Colors.green,
+                  Icons.arrow_downward_rounded,
+                ),
+                const SizedBox(width: 12),
+                _buildStatItem(
+                  'Total Out (-)',
+                  '\$$totalOut',
+                  accentColor,
+                  Icons.arrow_upward_rounded,
+                ),
+                const SizedBox(width: 12),
+                _buildStatItem(
+                  'Total Debt',
+                  '\$$totalDebt',
+                  const Color(0xFFD97706),
+                  Icons.money_off_csred_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             TextButton(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TransactionReportPage(customerId: widget.customerId, customerName: customerName))),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text('VIEW REPORTS ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                Icon(Icons.arrow_forward_ios, size: 14, color: Colors.blue),
-              ]),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TransactionReportPage(
+                    customerId: widget.customerId,
+                    customerName: customerName,
+                  ),
+                ),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '📊 VIEW REPORTS ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white),
+                ],
+              ),
             ),
           ],
         ),
@@ -579,44 +764,158 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A))),
-        Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
-      ]),
+  Widget _buildStatItem(
+    String label,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.white, size: 14),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 9,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
+  // ==================== SEARCH BAR ====================
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: primaryColor.withOpacity(0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: primaryColor.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchController,
+          onSubmitted: (value) {
+            setState(() {
+              _searchQuery = value.trim().toLowerCase();
+            });
+          },
+          decoration: InputDecoration(
+            hintText: '🔍 Filter by description...',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              color: primaryColor.withOpacity(0.6),
+            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear_rounded, color: Colors.grey),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 14,
+              horizontal: 4,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== TRANSACTION LIST ====================
   Widget _buildTransactionList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('transactions').where('customerId', isEqualTo: widget.customerId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('transactions')
+          .where('customerId', isEqualTo: widget.customerId)
+          .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-        if (!snapshot.hasData || snapshot.data == null) return const Center(child: Text('No transactions yet'));
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError)
+          return Center(child: Text('Error: ${snapshot.error}'));
+        if (!snapshot.hasData || snapshot.data == null)
+          return const Center(child: Text('No transactions yet'));
 
         List<QueryDocumentSnapshot> docs = snapshot.data!.docs;
         if (docs.isEmpty) {
-          return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text('Try adding your first entry', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-            SizedBox(height: 12), Icon(Icons.arrow_downward, color: Color(0xFF2563EB), size: 32),
-          ]));
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Try adding your first entry',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Icon(Icons.arrow_downward, color: primaryColor, size: 32),
+              ],
+            ),
+          );
         }
 
-        // Filter by description
         if (_searchQuery.isNotEmpty) {
           docs = docs.where((doc) {
-            final desc = (doc.data() as Map<String, dynamic>)['description'] ?? '';
+            final desc =
+                (doc.data() as Map<String, dynamic>)['description'] ?? '';
             return desc.toLowerCase().contains(_searchQuery);
           }).toList();
         }
 
-        // Sort: newest first (by createdAt)
         docs.sort((a, b) {
-          final aTime = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-          final bTime = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          final aTime =
+              (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          final bTime =
+              (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
           if (aTime == null && bTime == null) return 0;
           if (aTime == null) return 1;
           if (bTime == null) return -1;
@@ -633,13 +932,15 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             final amount = (tx['amount'] ?? 0).toDouble().abs();
             final type = tx['type'] ?? 'CASH_OUT';
             final timestamp = tx['createdAt'] as Timestamp?;
-            final date = timestamp != null ? DateFormat('dd MMM yyyy • hh:mm a').format(timestamp.toDate()) : 'Just now';
+            final date = timestamp != null
+                ? DateFormat('dd MMM yyyy • hh:mm a').format(timestamp.toDate())
+                : 'Just now';
 
             Color bgColor, textColor;
             String prefix;
             if (type == 'CASH_IN') {
               bgColor = const Color(0xFFECFDF5);
-              textColor = const Color(0xFF065F46);
+              textColor = secondaryColor;
               prefix = '+ ';
             } else if (type == 'DEBT') {
               bgColor = const Color(0xFFFFF7ED);
@@ -647,36 +948,108 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               prefix = '⚠ ';
             } else {
               bgColor = const Color(0xFFFEF2F2);
-              textColor = const Color(0xFFB91C1C);
+              textColor = accentColor;
               prefix = '- ';
             }
 
             return GestureDetector(
-              onTap: () => _editTransaction(transactionId: txId, oldAmount: amount, oldDescription: desc, type: type),
+              onTap: () => _editTransaction(
+                transactionId: txId,
+                oldAmount: amount,
+                oldDescription: desc,
+                type: type,
+              ),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: type == 'CASH_IN'
+                        ? secondaryColor.withOpacity(0.2)
+                        : type == 'DEBT'
+                        ? const Color(0xFFD97706).withOpacity(0.2)
+                        : accentColor.withOpacity(0.2),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Expanded(child: Text(desc, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
-                        if (type == 'DEBT') Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(4)),
-                          child: const Text("DEBT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFB45309))),
-                        ),
-                      ]),
-                      const SizedBox(height: 4),
-                      Text(date, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ])),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  desc,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                              if (type == 'DEBT')
+                                Container(
+                                  margin: const EdgeInsets.only(left: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    "DEBT",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            date,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(20)),
-                      child: Text('$prefix\$$amount', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: textColor.withOpacity(0.2)),
+                      ),
+                      child: Text(
+                        '$prefix\$$amount',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -688,41 +1061,98 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     );
   }
 
+  // ==================== ACTION BUTTONS ====================
   Widget _buildActionButtons(BuildContext context, double balance) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Row(children: [
-        _actionButton(context, 'CASH_IN', 'CASH IN', const Color(0xFF065F46), Icons.add, balance),
-        const SizedBox(width: 12),
-        _actionButton(context, 'CASH_OUT', 'CASH OUT', const Color(0xFFB91C1C), Icons.remove, balance),
-        const SizedBox(width: 12),
-        _actionButton(context, 'DEBT', 'DEBT', const Color(0xFFD97706), Icons.money_off_csred_rounded, balance),
-      ]),
+      child: Row(
+        children: [
+          _actionButton(
+            context,
+            'CASH_IN',
+            'CASH IN',
+            secondaryColor,
+            Icons.add,
+            balance,
+          ),
+          const SizedBox(width: 12),
+          _actionButton(
+            context,
+            'CASH_OUT',
+            'CASH OUT',
+            accentColor,
+            Icons.remove,
+            balance,
+          ),
+          const SizedBox(width: 12),
+          _actionButton(
+            context,
+            'DEBT',
+            'DEBT',
+            const Color(0xFFD97706),
+            Icons.money_off_csred_rounded,
+            balance,
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _actionButton(BuildContext context, String type, String label, Color color, IconData icon, double balance) {
+  Widget _actionButton(
+    BuildContext context,
+    String type,
+    String label,
+    Color color,
+    IconData icon,
+    double balance,
+  ) {
     return Expanded(
-      child: Column(children: [
-        Text(_buttonCaption(type), style: const TextStyle(fontSize: 13, color: Colors.grey)),
-        const SizedBox(height: 6),
-        ElevatedButton.icon(
-          onPressed: () => _showTransactionModal(context, type, balance),
-          icon: Icon(icon, color: Colors.white, size: 16),
-          label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
-          style: ElevatedButton.styleFrom(backgroundColor: color, minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 1),
-        ),
-      ]),
+      child: Column(
+        children: [
+          Text(
+            _buttonCaption(type),
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ElevatedButton.icon(
+            onPressed: () => _showTransactionModal(context, type, balance),
+            icon: Icon(icon, color: Colors.white, size: 16),
+            label: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 12,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              minimumSize: const Size(double.infinity, 44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   String _buttonCaption(String type) {
     switch (type) {
-      case 'CASH_IN': return 'Record Income';
-      case 'CASH_OUT': return 'Record Expense';
-      case 'DEBT': return 'Record Debt';
-      default: return '';
+      case 'CASH_IN':
+        return 'Record Income';
+      case 'CASH_OUT':
+        return 'Record Expense';
+      case 'DEBT':
+        return 'Record Debt';
+      default:
+        return '';
     }
   }
 }
