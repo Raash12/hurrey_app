@@ -19,7 +19,7 @@ class CustomerDetailPage extends StatefulWidget {
 }
 
 class _CustomerDetailPageState extends State<CustomerDetailPage> {
-  // ==================== COLORS (Matching Dashboard) ====================
+  // ==================== COLORS ====================
   static const primaryColor = Color(0xFF6C63FF);
   static const secondaryColor = Color(0xFF4CAF50);
   static const accentColor = Color(0xFFFF6B6B);
@@ -132,9 +132,9 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          top: 20,
-          left: 20,
-          right: 20,
+          top: 16,
+          left: 16,
+          right: 16,
         ),
         child: Form(
           key: formKey,
@@ -146,16 +146,18 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 children: [
                   const Text(
                     'Edit Transaction',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, size: 22),
                     onPressed: () => Navigator.pop(ctx),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
-              const Divider(),
-              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
               TextFormField(
                 controller: amountCtrl,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -163,8 +165,13 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 ),
                 decoration: InputDecoration(
                   labelText: 'Amount (\$)',
+                  labelStyle: const TextStyle(fontSize: 13),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                 ),
                 validator: (v) {
@@ -174,20 +181,25 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: descCtrl,
                 maxLines: 2,
                 decoration: InputDecoration(
                   labelText: 'Description',
+                  labelStyle: const TextStyle(fontSize: 13),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                 ),
                 validator: (v) =>
                     v == null || v.isEmpty ? 'Enter description' : null,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
                   if (formKey.currentState!.validate()) {
@@ -199,17 +211,21 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  minimumSize: const Size(double.infinity, 50),
+                  minimumSize: const Size(double.infinity, 42),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text(
                   'UPDATE',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -289,9 +305,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   // ==================== UI MODALS ====================
@@ -307,13 +321,13 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     String title;
     Color color;
     if (type == 'CASH_IN') {
-      title = 'Record Cash In (+)';
+      title = 'Cash In (+)';
       color = secondaryColor;
     } else if (type == 'CASH_OUT') {
-      title = 'Record Cash Out (-)';
+      title = 'Cash Out (-)';
       color = accentColor;
     } else {
-      title = 'Record Debt (Dayn)';
+      title = 'Debt (Dayn)';
       color = const Color(0xFFD97706);
     }
 
@@ -326,9 +340,9 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          top: 20,
-          left: 20,
-          right: 20,
+          top: 16,
+          left: 16,
+          right: 16,
         ),
         child: Form(
           key: formKey,
@@ -337,13 +351,14 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildModalHeader(ctx, title, color),
-              const Divider(),
+              const Divider(height: 1),
               Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  'Available Net Balance: \$$currentBalance',
+                  'Balance: \$$currentBalance',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
+                    fontSize: 13,
                     color: type == 'CASH_OUT' ? Colors.red : Colors.grey,
                   ),
                 ),
@@ -355,9 +370,14 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 ),
                 decoration: InputDecoration(
                   labelText: 'Amount (\$)',
-                  prefixIcon: const Icon(Icons.attach_money),
+                  labelStyle: const TextStyle(fontSize: 13),
+                  prefixIcon: const Icon(Icons.attach_money, size: 18),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                 ),
                 validator: (v) {
@@ -366,15 +386,15 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   if (amount == null || amount <= 0)
                     return 'Enter a positive number';
                   if (type == 'CASH_OUT' && amount > currentBalance)
-                    return 'Haraagu kuguma filna! Isticmaal DEBT hadii kale.';
+                    return 'Haraagu kuguma filna!';
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               _buildDescriptionField(descCtrl),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               _buildSaveButton(ctx, type, amountCtrl, descCtrl, formKey, color),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -389,14 +409,16 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         Text(
           title,
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
             color: color,
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.close, size: 22),
           onPressed: () => Navigator.pop(context),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
         ),
       ],
     );
@@ -408,11 +430,16 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       maxLines: 2,
       decoration: InputDecoration(
         labelText: 'Description',
-        prefixIcon: const Icon(Icons.description),
+        labelStyle: const TextStyle(fontSize: 13),
+        prefixIcon: const Icon(Icons.description, size: 18),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
       ),
       validator: (v) =>
-          v == null || v.trim().isEmpty ? 'Enter a description' : null,
+          v == null || v.trim().isEmpty ? 'Enter description' : null,
     );
   }
 
@@ -435,12 +462,16 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        minimumSize: const Size(double.infinity, 50),
+        minimumSize: const Size(double.infinity, 42),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       child: const Text(
-        'SAVE TRANSACTION',
-        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        'SAVE',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 14,
+        ),
       ),
     );
   }
@@ -450,22 +481,25 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
             SizedBox(width: 8),
-            Text('Delete Customer?'),
+            Text('Delete Customer?', style: TextStyle(fontSize: 16)),
           ],
         ),
         content: const Text(
           'This action is permanent and cannot be undone.',
-          style: TextStyle(color: Colors.black54),
+          style: TextStyle(color: Colors.black54, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -483,17 +517,26 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 for (var doc in txs.docs) await doc.reference.delete();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Customer deleted')),
+                    const SnackBar(
+                      content: Text('Customer deleted'),
+                      duration: Duration(seconds: 2),
+                    ),
                   );
                 }
               } catch (e) {
                 debugPrint('Delete error: $e');
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             child: const Text(
-              'YES, DELETE',
-              style: TextStyle(color: Colors.white),
+              'DELETE',
+              style: TextStyle(color: Colors.white, fontSize: 13),
             ),
           ),
         ],
@@ -507,11 +550,13 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     return Scaffold(
       backgroundColor: lightBgColor,
       appBar: AppBar(
+        toolbarHeight: 52,
         backgroundColor: Colors.white,
         elevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: primaryColor),
+          icon: const Icon(Icons.arrow_back, color: primaryColor, size: 22),
           onPressed: () => Navigator.pop(context),
+          padding: const EdgeInsets.all(8),
         ),
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
@@ -534,12 +579,14 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   style: const TextStyle(
                     color: primaryColor,
                     fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                    fontSize: 15,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const Text(
-                  'Customer Ledger Details',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  'Ledger',
+                  style: TextStyle(color: Colors.grey, fontSize: 10),
                 ),
               ],
             );
@@ -563,9 +610,9 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 value: 'edit',
                 child: Row(
                   children: [
-                    Icon(Icons.edit_outlined, color: Colors.blue),
+                    Icon(Icons.edit_outlined, color: Colors.blue, size: 18),
                     SizedBox(width: 8),
-                    Text('Edit Profile'),
+                    Text('Edit Profile', style: TextStyle(fontSize: 14)),
                   ],
                 ),
               ),
@@ -573,17 +620,17 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_outline, color: Colors.red),
+                    Icon(Icons.delete_outline, color: Colors.red, size: 18),
                     SizedBox(width: 8),
                     Text(
-                      'Delete Customer',
-                      style: TextStyle(color: Colors.red),
+                      'Delete',
+                      style: TextStyle(color: Colors.red, fontSize: 14),
                     ),
                   ],
                 ),
               ),
             ],
-            icon: const Icon(Icons.more_vert, color: primaryColor),
+            icon: const Icon(Icons.more_vert, color: primaryColor, size: 22),
           ),
         ],
       ),
@@ -633,7 +680,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     );
   }
 
-  // ==================== SUMMARY CARD (Matching Dashboard Style) ====================
+  // ==================== SUMMARY CARD (RESPONSIVE) ====================
   Widget _buildSummaryCard(
     double balance,
     dynamic totalIn,
@@ -643,22 +690,22 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     BuildContext context,
   ) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [gradientStart, gradientEnd],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: primaryColor.withOpacity(0.3),
-              blurRadius: 15,
-              offset: const Offset(0, 6),
+              color: primaryColor.withOpacity(0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -671,25 +718,25 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '💰 Net Balance',
+                      '💰 Balance',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 11,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       '\$$balance',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 28,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
@@ -697,37 +744,37 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   child: const Icon(
                     Icons.account_balance_wallet_rounded,
                     color: Colors.white,
-                    size: 30,
+                    size: 24,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
               children: [
                 _buildStatItem(
-                  'Total In (+)',
+                  'In',
                   '\$$totalIn',
-                  Colors.green,
+                  secondaryColor,
                   Icons.arrow_downward_rounded,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _buildStatItem(
-                  'Total Out (-)',
+                  'Out',
                   '\$$totalOut',
                   accentColor,
                   Icons.arrow_upward_rounded,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _buildStatItem(
-                  'Total Debt',
+                  'Debt',
                   '\$$totalDebt',
                   const Color(0xFFD97706),
                   Icons.money_off_csred_rounded,
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.push(
                 context,
@@ -741,20 +788,24 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white.withOpacity(0.15),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                minimumSize: const Size(double.infinity, 32),
+                padding: const EdgeInsets.symmetric(vertical: 4),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '📊 VIEW REPORTS ',
+                    '📊 Reports',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      fontSize: 12,
                     ),
                   ),
-                  Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white),
                 ],
               ),
             ),
@@ -772,22 +823,22 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   ) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: Colors.white, size: 14),
+              child: Icon(icon, color: Colors.white, size: 12),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -795,8 +846,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   Text(
                     label,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 9,
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 8,
                     ),
                   ),
                   Text(
@@ -804,8 +855,10 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 11,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -819,48 +872,53 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   // ==================== SEARCH BAR ====================
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: primaryColor.withOpacity(0.2)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: primaryColor.withOpacity(0.15)),
           boxShadow: [
             BoxShadow(
-              color: primaryColor.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: primaryColor.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: TextField(
           controller: _searchController,
-          onSubmitted: (value) {
-            setState(() {
-              _searchQuery = value.trim().toLowerCase();
-            });
-          },
+          onChanged: (value) =>
+              setState(() => _searchQuery = value.trim().toLowerCase()),
           decoration: InputDecoration(
-            hintText: '🔍 Filter by description...',
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+            hintText: '🔍 Filter...',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             prefixIcon: Icon(
               Icons.search_rounded,
-              color: primaryColor.withOpacity(0.6),
+              color: primaryColor.withOpacity(0.5),
+              size: 18,
             ),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear_rounded, color: Colors.grey),
+                    icon: const Icon(
+                      Icons.clear_rounded,
+                      color: Colors.grey,
+                      size: 18,
+                    ),
                     onPressed: () {
                       _searchController.clear();
                       setState(() => _searchQuery = '');
                     },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   )
                 : null,
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(
-              vertical: 14,
+              vertical: 10,
               horizontal: 4,
             ),
+            constraints: const BoxConstraints(minHeight: 38),
           ),
         ),
       ),
@@ -889,15 +947,15 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Try adding your first entry',
+                  'No entries yet',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: primaryColor,
                   ),
                 ),
-                SizedBox(height: 12),
-                Icon(Icons.arrow_downward, color: primaryColor, size: 32),
+                SizedBox(height: 8),
+                Icon(Icons.arrow_downward, color: primaryColor, size: 28),
               ],
             ),
           );
@@ -923,7 +981,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         });
 
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           itemCount: docs.length,
           itemBuilder: (_, i) {
             final tx = docs[i].data() as Map<String, dynamic>;
@@ -933,7 +991,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             final type = tx['type'] ?? 'CASH_OUT';
             final timestamp = tx['createdAt'] as Timestamp?;
             final date = timestamp != null
-                ? DateFormat('dd MMM yyyy • hh:mm a').format(timestamp.toDate())
+                ? DateFormat('dd MMM yy • hh:mm a').format(timestamp.toDate())
                 : 'Just now';
 
             Color bgColor, textColor;
@@ -960,23 +1018,23 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 type: type,
               ),
               child: Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: type == 'CASH_IN'
-                        ? secondaryColor.withOpacity(0.2)
+                        ? secondaryColor.withOpacity(0.15)
                         : type == 'DEBT'
-                        ? const Color(0xFFD97706).withOpacity(0.2)
-                        : accentColor.withOpacity(0.2),
+                        ? const Color(0xFFD97706).withOpacity(0.15)
+                        : accentColor.withOpacity(0.15),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: primaryColor.withOpacity(0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+                      color: primaryColor.withOpacity(0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
@@ -993,27 +1051,29 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                                 child: Text(
                                   desc,
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF0F172A),
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (type == 'DEBT')
                                 Container(
-                                  margin: const EdgeInsets.only(left: 6),
+                                  margin: const EdgeInsets.only(left: 4),
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
+                                    horizontal: 4,
+                                    vertical: 1,
                                   ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(3),
                                   ),
                                   child: const Text(
                                     "DEBT",
                                     style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 8,
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFFB45309),
                                     ),
@@ -1021,11 +1081,11 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             date,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 10,
                               color: Colors.grey,
                             ),
                           ),
@@ -1034,18 +1094,18 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                        horizontal: 8,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
                         color: bgColor,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: textColor.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: textColor.withOpacity(0.15)),
                       ),
                       child: Text(
                         '$prefix\$$amount',
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: textColor,
                         ),
@@ -1064,27 +1124,27 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   // ==================== ACTION BUTTONS ====================
   Widget _buildActionButtons(BuildContext context, double balance) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       child: Row(
         children: [
           _actionButton(
             context,
             'CASH_IN',
-            'CASH IN',
+            'IN',
             secondaryColor,
             Icons.add,
             balance,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           _actionButton(
             context,
             'CASH_OUT',
-            'CASH OUT',
+            'OUT',
             accentColor,
             Icons.remove,
             balance,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           _actionButton(
             context,
             'DEBT',
@@ -1112,30 +1172,31 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           Text(
             _buttonCaption(type),
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 9,
               color: Colors.grey.shade500,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           ElevatedButton.icon(
             onPressed: () => _showTransactionModal(context, type, balance),
-            icon: Icon(icon, color: Colors.white, size: 16),
+            icon: Icon(icon, color: Colors.white, size: 14),
             label: Text(
               label,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
-              minimumSize: const Size(double.infinity, 44),
+              minimumSize: const Size(double.infinity, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              elevation: 2,
+              elevation: 1,
             ),
           ),
         ],
@@ -1146,11 +1207,11 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
   String _buttonCaption(String type) {
     switch (type) {
       case 'CASH_IN':
-        return 'Record Income';
+        return 'Income';
       case 'CASH_OUT':
-        return 'Record Expense';
+        return 'Expense';
       case 'DEBT':
-        return 'Record Debt';
+        return 'Debt';
       default:
         return '';
     }
