@@ -136,7 +136,19 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
       _remarkCtrl.clear();
       _amountCtrl.clear();
       _showSnackBar('✅ Task waa la kaydiyay!');
+
+      // FORM KA XIR
+      Navigator.pop(context);
+
+      // LIST KA CUSBOONAYSII
       await _loadData();
+
+      // SCROLL TO TOP
+      _scrollCtrl.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     } catch (e) {
       _showSnackBar('❌ Cillad: $e', true);
     }
@@ -171,8 +183,13 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
       _remarkCtrl.clear();
       _amountCtrl.clear();
       _editingDocId = null;
+
+      // FORM KA XIR
       Navigator.pop(context);
+
       _showSnackBar('✅ Task waa la cusboonaysiiyay!');
+
+      // LIST KA CUSBOONAYSII
       await _loadData();
     } catch (e) {
       _showSnackBar('❌ Cillad: $e', true);
@@ -256,25 +273,48 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
                 children: [
                   _buildDialogHeader(title, icon, c),
                   const SizedBox(height: 16),
+                  // NAME - Required
                   TextFormField(
                     controller: _nameCtrl,
-                    decoration: _inputDec('Task Name', Icons.task_alt_rounded),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'Gali magaca' : null,
+                    decoration: _inputDec(
+                      'Task Name *',
+                      Icons.task_alt_rounded,
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Gali magaca task-ga'
+                        : null,
                   ),
                   const SizedBox(height: 10),
+                  // REMARK - Required
                   TextFormField(
                     controller: _remarkCtrl,
-                    decoration: _inputDec('Remark', Icons.comment_rounded),
+                    decoration: _inputDec('Remark *', Icons.comment_rounded),
                     maxLines: 2,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Gali faahfaahin'
+                        : null,
                   ),
                   const SizedBox(height: 10),
+                  // AMOUNT - Required
                   TextFormField(
                     controller: _amountCtrl,
                     keyboardType: TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: _inputDec('Amount', Icons.attach_money_rounded),
+                    decoration: _inputDec(
+                      'Amount *',
+                      Icons.attach_money_rounded,
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Gali lacagta';
+                      }
+                      final amount = double.tryParse(v.trim());
+                      if (amount == null || amount < 0) {
+                        return 'Gali tiro sax ah';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 14),
                   _buildDateTimePickers(c),
@@ -339,7 +379,7 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
           shadowColor: Colors.transparent,
         ),
         child: Text(
-          _editingDocId == null ? 'Kaydi' : 'Cusboonaysii',
+          _editingDocId == null ? 'Kaydi Task' : 'Cusboonaysii',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -1527,6 +1567,7 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
                   ),
                 ),
               ),
+            // EDIT BUTTON - SAME SIZE AS DELETE
             Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(colors: [gradient1, gradient2]),
@@ -1536,7 +1577,7 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
                 icon: const Icon(
                   Icons.edit_rounded,
                   color: Colors.white,
-                  size: 15,
+                  size: 16,
                 ),
                 onPressed: () => _editTask(doc.id, data),
                 padding: const EdgeInsets.all(4),
@@ -1544,6 +1585,7 @@ class _DailyTaskPageState extends State<DailyTaskPage> {
                 splashRadius: 14,
               ),
             ),
+            // DELETE BUTTON
             IconButton(
               icon: Icon(
                 Icons.delete_outline_rounded,
