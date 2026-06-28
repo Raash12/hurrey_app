@@ -36,7 +36,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     super.dispose();
   }
 
-  // ==================== SAVE TRANSACTION ====================
+  // ==================== FORMAT MONEY (2 DECIMAL) ====================
+  String _formatMoney(double amount) {
+    return amount.toStringAsFixed(2);
+  }
+
+  // ==================== SAVE TRANSACTION (SAXAN) ====================
   Future<void> _saveTransaction({
     required double amount,
     required String description,
@@ -109,6 +114,15 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       setState(() {});
     } catch (e) {
       debugPrint('Transaction error: $e');
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -240,12 +254,35 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           .collection('transactions')
           .doc(transactionId);
 
-      await txRef.update({'amount': newAmount, 'description': newDescription});
-      await _recalculateCustomerTotalsFromTransactions();
+      try {
+        await txRef.update({
+          'amount': newAmount,
+          'description': newDescription,
+        });
+        await _recalculateCustomerTotalsFromTransactions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Transaction updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Edit error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
-  // ==================== RECALCULATE ALL TOTALS ====================
+  // ==================== RECALCULATE ALL TOTALS (SAXAN) ====================
   Future<void> _recalculateCustomerTotalsFromTransactions() async {
     final customerRef = FirebaseFirestore.instance
         .collection('addCustomer')
@@ -355,7 +392,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  'Balance: \$$currentBalance',
+                  'Balance: \$${_formatMoney(currentBalance)}',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
@@ -518,13 +555,22 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Customer deleted'),
+                      content: Text('Customer deleted successfully'),
                       duration: Duration(seconds: 2),
                     ),
                   );
+                  Navigator.pop(context);
                 }
               } catch (e) {
                 debugPrint('Delete error: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(
@@ -640,16 +686,40 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
             .doc(widget.customerId)
             .snapshots(),
         builder: (context, customerSnap) {
-          if (customerSnap.connectionState == ConnectionState.waiting)
+          if (customerSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (customerSnap.hasError)
-            return Center(child: Text('Error: ${customerSnap.error}'));
-          if (!customerSnap.hasData || customerSnap.data == null)
+          }
+          if (customerSnap.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: ${customerSnap.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {});
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+          if (!customerSnap.hasData || customerSnap.data == null) {
             return const Center(child: CircularProgressIndicator());
+          }
 
           final customerDoc = customerSnap.data!;
-          if (!customerDoc.exists)
+          if (!customerDoc.exists) {
             return const Center(child: Text('Customer no longer exists.'));
+          }
 
           final data = customerDoc.data() as Map<String, dynamic>? ?? {};
           final balance = (data['totalBalance'] ?? 0).toDouble();
@@ -726,7 +796,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '\$$balance',
+                      '\$${_formatMoney(balance)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -754,21 +824,21 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
               children: [
                 _buildStatItem(
                   'In',
-                  '\$$totalIn',
+                  _formatMoney(totalIn.toDouble()),
                   secondaryColor,
                   Icons.arrow_downward_rounded,
                 ),
                 const SizedBox(width: 8),
                 _buildStatItem(
                   'Out',
-                  '\$$totalOut',
+                  _formatMoney(totalOut.toDouble()),
                   accentColor,
                   Icons.arrow_upward_rounded,
                 ),
                 const SizedBox(width: 8),
                 _buildStatItem(
                   'Debt',
-                  '\$$totalDebt',
+                  _formatMoney(totalDebt.toDouble()),
                   const Color(0xFFD97706),
                   Icons.money_off_csred_rounded,
                 ),
@@ -851,7 +921,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     ),
                   ),
                   Text(
-                    value,
+                    '\$$value',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -933,12 +1003,28 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           .where('customerId', isEqualTo: widget.customerId)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError)
-          return Center(child: Text('Error: ${snapshot.error}'));
-        if (!snapshot.hasData || snapshot.data == null)
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                const SizedBox(height: 8),
+                Text(
+                  'Error: ${snapshot.error}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
+            ),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data == null) {
           return const Center(child: Text('No transactions yet'));
+        }
 
         List<QueryDocumentSnapshot> docs = snapshot.data!.docs;
         if (docs.isEmpty) {
@@ -954,7 +1040,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     color: primaryColor,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Icon(Icons.arrow_downward, color: primaryColor, size: 28),
               ],
             ),
@@ -1103,7 +1189,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                         border: Border.all(color: textColor.withOpacity(0.15)),
                       ),
                       child: Text(
-                        '$prefix\$$amount',
+                        '$prefix\$${_formatMoney(amount)}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,

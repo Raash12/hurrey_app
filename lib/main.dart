@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:hurrey_app/Auth/SignUpScreen.dart';
-import 'package:hurrey_app/Auth/login_screen.dart'; // Hubi in AuthWrapper uu faylkan ku dhex jiro ama soo dhoweyso meeshii aad ku qortay
+import 'package:hurrey_app/Auth/login_screen.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -23,9 +22,8 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.grey[100],
       ),
-      // Halkii ay ahaan lahayd LoginScreenModern(), waxaan u bedelnay AuthWrapper()
-      // Kani wuxuu hubinayaa haddii qofku horey u login ahaa in toos loogu gudbiyo Dashboard-ka
-      home: const AuthWrapper(),
+      // Mar walba Login Screen ayaa soo baxaysa
+      home: const LoginScreenModern(),
     );
   }
 }

@@ -2,42 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hurrey_app/pages/dashboard_screen.dart';
+import 'package:hurrey_app/Auth/SignUpScreen.dart';
 
-/// AuthWrapper - Kani waa logic-ga Facebook camal u shaqaynaya.
-/// Wuxuu hubinayaa haddii qofku login yahay wuxuu u gudbinayaa Dashboard,
-/// haddii kalena wuxuu tusayaa LoginScreenModern.
-class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // Haddii ay Firebase weli hubinayso xogta, loading ha tuso
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C63FF)),
-              ),
-            ),
-          );
-        }
-
-        // Haddii uu qofku horey u login-gaday, toos ha ugu gudbo Dashboard-ka
-        if (snapshot.hasData) {
-          return const DashboardScreen();
-        }
-
-        // Haddii kale (ama uu logout yiri), ha loo muujiyo Login Screen-ka
-        return const LoginScreenModern();
-      },
-    );
-  }
-}
-
-/// LoginScreenModern - Matching Dashboard Design
+/// LoginScreenModern - Login Screen ah oo mar walba soo baxa
 class LoginScreenModern extends StatefulWidget {
   const LoginScreenModern({super.key});
 
@@ -47,7 +14,7 @@ class LoginScreenModern extends StatefulWidget {
 
 class _LoginScreenModernState extends State<LoginScreenModern>
     with SingleTickerProviderStateMixin {
-  // ==================== COLORS (Matching Dashboard) ====================
+  // ==================== COLORS ====================
   static const primaryColor = Color(0xFF6C63FF);
   static const secondaryColor = Color(0xFF4CAF50);
   static const gradientStart = Color(0xFF6C63FF);
@@ -89,6 +56,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
     super.dispose();
   }
 
+  // ==================== SIGN IN ====================
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -103,19 +71,56 @@ class _LoginScreenModernState extends State<LoginScreenModern>
       );
       if (!mounted) return;
 
-      // Halkan waxaan u bedelay pushedReplacement una racyey AuthWrapper
-      // si uu u maareeyo state-ka marka uu guuleysto login-ku.
+      // Login guuleystay, u gudub Dashboard
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const AuthWrapper()),
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     } on FirebaseAuthException catch (e) {
-      _showSnack(e.message ?? 'Login failed');
+      String message = 'Login failed';
+      if (e.code == 'user-not-found') {
+        message = 'User not found. Please sign up.';
+      } else if (e.code == 'wrong-password') {
+        message = 'Incorrect password.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Invalid email address.';
+      } else if (e.code == 'too-many-requests') {
+        message = 'Too many attempts. Try again later.';
+      } else if (e.code == 'user-disabled') {
+        message = 'This account has been disabled.';
+      } else {
+        message = e.message ?? 'Login failed';
+      }
+      _showSnack(message);
     } catch (_) {
-      _showSnack('Something went wrong');
+      _showSnack('Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // ==================== SIGN OUT ====================
+  Future<void> _signOut() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        // Marka logout dhaco, ku soo celi Login Screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreenModern()),
+        );
+      }
+    } catch (e) {
+      _showSnack('Error signing out');
+    }
+  }
+
+  // ==================== NAVIGATE TO SIGN UP ====================
+  void _goToSignUp() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SignUpScreen()),
+    );
   }
 
   void _showSnack(String msg) {
@@ -127,13 +132,14 @@ class _LoginScreenModernState extends State<LoginScreenModern>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         showCloseIcon: true,
         closeIconColor: Colors.white,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
+  // ==================== BUILD ====================
   @override
   Widget build(BuildContext context) {
-    // --- Responsive sizing ---
     final size = MediaQuery.of(context).size;
     final w = size.width;
 
@@ -161,7 +167,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
       backgroundColor: lightBgColor,
       body: Stack(
         children: [
-          // Background Gradient (Matching Dashboard Style)
+          // Background Gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -176,7 +182,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
             ),
           ),
 
-          // Decorative Circles (Matching Dashboard Aesthetic)
+          // Decorative Circles
           Positioned(
             top: -80,
             right: -80,
@@ -232,7 +238,6 @@ class _LoginScreenModernState extends State<LoginScreenModern>
                           // Logo + Headings
                           Column(
                             children: [
-                              // Logo Container with Gradient Border (Matching Dashboard)
                               Container(
                                 width: logoSize,
                                 height: logoSize,
@@ -298,7 +303,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
 
                           SizedBox(height: gapLarge),
 
-                          // Card with Form (Matching Dashboard Card Style)
+                          // Card with Form
                           Container(
                             padding: EdgeInsets.all(
                               (22 * scale).clamp(18, 26).toDouble(),
@@ -328,7 +333,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // Login Title with Icon
+                                  // Login Title
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
@@ -407,9 +412,40 @@ class _LoginScreenModernState extends State<LoginScreenModern>
                                         : null,
                                   ),
 
+                                  SizedBox(height: gapSmall),
+
+                                  // Forgot Password
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: () {
+                                        _showSnack(
+                                          'Contact admin to reset password',
+                                        );
+                                      },
+                                      style: TextButton.styleFrom(
+                                        minimumSize: Size.zero,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                        ),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: Text(
+                                        'Forgot Password?',
+                                        style: TextStyle(
+                                          fontSize: (12 * scale)
+                                              .clamp(10, 14)
+                                              .toDouble(),
+                                          color: primaryColor.withOpacity(0.7),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
                                   SizedBox(height: gapMed),
 
-                                  // Sign In Button (Matching Dashboard Gradient)
+                                  // Sign In Button
                                   SizedBox(
                                     height: buttonHeight,
                                     child: Container(
@@ -468,6 +504,46 @@ class _LoginScreenModernState extends State<LoginScreenModern>
                                       ),
                                     ),
                                   ),
+
+                                  SizedBox(height: gapSmall),
+
+                                  // Sign Up Link
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "Don't have an account?",
+                                        style: TextStyle(
+                                          fontSize: (13 * scale)
+                                              .clamp(11, 15)
+                                              .toDouble(),
+                                          color: textColor.withOpacity(0.6),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: _goToSignUp,
+                                        style: TextButton.styleFrom(
+                                          minimumSize: Size.zero,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 4,
+                                          ),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          "Sign Up",
+                                          style: TextStyle(
+                                            fontSize: (13 * scale)
+                                                .clamp(11, 15)
+                                                .toDouble(),
+                                            fontWeight: FontWeight.bold,
+                                            color: primaryColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
@@ -498,7 +574,7 @@ class _LoginScreenModernState extends State<LoginScreenModern>
     );
   }
 
-  // ==================== CUSTOM TEXT FIELD (Matching Dashboard Style) ====================
+  // ==================== CUSTOM TEXT FIELD ====================
   Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
